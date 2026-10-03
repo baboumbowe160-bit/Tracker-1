@@ -223,3 +223,10 @@ main { max-width: 680px; margin: 0 auto; padding: 12px 12px 0; }
 .help p { margin: 0 0 8px; font-size: 0.93rem; }
 .bracket-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 6px; margin-bottom: 6px; }
 .bracket-row input { width: 100%; padding: 9px; border: 1px solid var(--line); border-radius: 9px; }
+
+/* Online sync badge in the top bar */
+.sync-badge { border: 0; border-radius: 12px; padding: 4px 10px; font-size: 0.74rem; font-weight: 700; white-space: nowrap;
+  background: rgba(255, 255, 255, 0.16); color: #fff; }
+.sync-badge.t-credit { background: #DDF2E7; color: var(--credit); }
+.sync-badge.t-owed { background: var(--kiosk); color: var(--ink); }
+.sync-badge.t-late { background: #FBE7E5; color: var(--late); }

@@ -97,8 +97,10 @@
   var S = blankState(), R = null;
   function recompute() { R = C.computeAll(S); }
   function persist() {
+    if (window.Sync) Sync.track(S);
     recompute();
-    return Store.set(S).catch(function () { toast('Not saved: your phone storage may be full.'); });
+    return Store.set(S).then(function () { if (window.Sync) Sync.schedule(); })
+      .catch(function () { toast('Not saved: your phone storage may be full.'); });
   }
 
   /* ================= Navigation ================= */
@@ -107,7 +109,7 @@
   var TITLES = { home: 'Business Tracker', sales: 'Sales', agents: 'Agents', customers: 'Customers', more: 'More',
     share: 'Share a statement', daily: 'Daily cash check', recon: 'Monthly reconciliation', losses: 'Losses and errors',
     comm: 'Commissions', ref: 'Referral agents', capital: 'Capital portfolio', backup: 'Backup and restore',
-    settings: 'Settings', help: 'How it works' };
+    settings: 'Settings', help: 'How it works', sync: 'Online sync' };
   function cur() { return UI.stack[UI.stack.length - 1]; }
   function go(v) { UI.stack.push(v); history.pushState({ n: UI.stack.length }, ''); render(); window.scrollTo(0, 0); }
   function setTab(t) { UI.stack = [{ v: t }]; UI.limit = 120; render(); window.scrollTo(0, 0); }
@@ -166,7 +168,7 @@
     if (v.v === 'customer') { var c = findCustomer(v.key); title = c ? (c.name || c.phone) : 'Customer'; }
     if (v.v === 'agent') { var a = findAgent(v.key); title = a ? a.name : 'Agent'; }
     var top = '<header class="topbar">' + (UI.stack.length > 1 ? '<button class="back" data-act="back" aria-label="Back">‹</button>' : '') +
-      '<h1>' + esc(title) + '</h1>' + (v.v === 'home' ? '<span class="today">' + esc(readable(R.today)) + '</span>' : '') + '</header>';
+      '<h1>' + esc(title) + '</h1>' + syncBadge() + '</header>';
     var body = (VIEWS[v.v] || VIEWS.home)(v);
     root.innerHTML = top + '<main>' + body + '</main>' + navBar() + fab(v);
     if (LISTS[v.v]) renderList();
@@ -205,7 +207,7 @@
       h += '<div class="card"><b>Welcome.</b><p class="hint" style="margin:6px 0 12px">Add your first sale with the yellow button, or bring in your existing records from the backup file I gave you.</p>' +
         '<button class="btn primary" data-act="go" data-v="backup">Restore my existing records</button></div>';
     }
-    h += '<div class="today-strip"><div><div class="label">Received today</div><div class="big">' + money(recvToday) + '</div></div>' +
+    h += '<div class="today-strip"><div><div class="label">Received today, ' + esc(shortDate(today)) + '</div><div class="big">' + money(recvToday) + '</div></div>' +
       '<div style="text-align:right"><div class="label">Entries today</div><div class="big">' + todays.length + '</div></div></div>';
     var owingCount = R.customers.filter(function (c) { return c.owed > 0; }).length;
     var lossM = (R.losses.byMonth.filter(function (x) { return x.month === month; })[0] || {}).amount || 0;
@@ -223,6 +225,7 @@
   };
 
   function backupBanner() {
+    if (window.Sync && Sync.status().signedIn) return '';
     if (!S.sales.length && !S.agents.length) return '';
     var lb = S.meta.lastBackup, days = lb ? C.toDays(R.today) - C.toDays(lb) : null;
     if (lb && days < 7) return '';
@@ -423,7 +426,9 @@
 
   /* ----- More ----- */
   VIEWS.more = function () {
+    var ss = window.Sync ? Sync.status() : { configured: false };
     var items = [
+      ['sync', 'Online sync', ss.signedIn ? 'On: ' + ss.label + (ss.email ? ', ' + ss.email : '') : ss.configured ? 'Sign in to start syncing' : 'Save your records online, no backups needed'],
       ['share', 'Share a statement', 'Send a customer or agent their balance on WhatsApp'],
       ['daily', 'Daily cash check', 'Opening and closing balances, to catch missing money'],
       ['recon', 'Monthly reconciliation', 'Compare your records with your statements'],
@@ -627,8 +632,11 @@
   /* ----- Backup ----- */
   VIEWS.backup = function () {
     var lb = S.meta.lastBackup;
-    return '<div class="card"><b>Your records live only on this phone.</b><p class="hint" style="margin:6px 0 0">If the phone is lost, or the app\'s data is cleared, they are gone unless you have a backup. Save one at least once a week and keep a copy off the phone, for example on Google Drive or sent to yourself on WhatsApp.</p></div>' +
-      '<div class="card">' + kv('Last backup', lb ? esc(readable(lb)) : 'Never') + kv('Sales', S.sales.length) + kv('Agent entries', S.agents.length) +
+    if (window.Sync && Sync.status().signedIn) return '<div class="card"><b>Online sync is on.</b><p class="hint" style="margin:6px 0 0">Your records are saved to your online account automatically. Backups here are optional extra copies.</p></div>' + backupBody(lb);
+    return '<div class="card"><b>Your records live only on this phone.</b><p class="hint" style="margin:6px 0 0">If the phone is lost, or the app\'s data is cleared, they are gone unless you have a backup. Save one at least once a week and keep a copy off the phone, for example on Google Drive or sent to yourself on WhatsApp. Or switch on Online sync under More.</p></div>' + backupBody(lb);
+  };
+  function backupBody(lb) {
+    return '<div class="card">' + kv('Last backup', lb ? esc(readable(lb)) : 'Never') + kv('Sales', S.sales.length) + kv('Agent entries', S.agents.length) +
       kv('Referral sales', S.referrals.length) + kv('Commission entries', S.walletComm.length + S.evc.length) + '</div>' +
       '<div class="actions"><button class="btn kiosk" data-act="backupShare">Send backup to Drive or WhatsApp</button><button class="btn primary" data-act="backupDownload">Save backup to phone</button></div>' +
       '<div class="section-title">Restore</div><p class="hint">Use this to bring in your existing records (the file named my-records-PRIVATE.json), or to move to a new phone. It replaces everything currently in the app.</p>' +
@@ -661,6 +669,80 @@
       '<h3>EVC</h3><p>Commission = purchase x return rate. Royalty = retail part x retail royalty rate, plus wholesale part x wholesale royalty rate. On the wholesale part, the rest goes to the wholesaler.</p>' +
       '<h3>Your data</h3><p>Everything stays on this phone and works without internet. Back it up every week from More, then Backup and restore.</p></div>';
   };
+
+  /* ================= Online sync ================= */
+  var RULES = "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /users/{userId}/{document=**} {\n      allow read, write: if request.auth != null && request.auth.uid == userId;\n    }\n  }\n}";
+  function syncBadge() {
+    var s = window.Sync ? Sync.status() : null;
+    if (!s || !s.configured || !s.label) return '<span id="sync-badge"></span>';
+    return '<button id="sync-badge" class="sync-badge t-' + s.tone + '" data-act="go" data-v="sync">' + esc(s.label) + '</button>';
+  }
+  var lastPhase = '';
+  function updateSyncBadge(s) {
+    var el = document.getElementById('sync-badge');
+    if (el) el.outerHTML = syncBadge();
+    var live = document.getElementById('sync-live');
+    if (live && s) live.innerHTML = syncLive(s);
+    if (s && s.phase !== lastPhase) {
+      lastPhase = s.phase;
+      var typing = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+      if (['sync', 'home', 'backup', 'more'].indexOf(cur().v) >= 0 && !UI.sheetOpen && !typing) render();
+    }
+  }
+  function syncLive(s) {
+    var when = s.lastSynced ? new Date(s.lastSynced).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    var cls = s.tone === 'credit' ? 'p-overpaid' : s.tone === 'late' ? 'p-overdue' : s.tone === 'owed' ? 'p-outstanding' : 'p-paid';
+    return '<div class="card">' + kv('Status', '<span class="pill ' + cls + '">' + esc(s.label || 'Not set up') + '</span>') +
+      (s.email ? kv('Signed in as', esc(s.email)) : '') + kv('Changes waiting to go online', s.pending) +
+      (when ? kv('Last synced', esc(when)) : '') +
+      (s.error ? '<div class="form-error" style="margin-top:8px">' + esc(s.error) + '</div>' : '') + '</div>';
+  }
+  VIEWS.sync = function () {
+    var s = Sync.status(), h = '';
+    if (!s.configured) {
+      h += '<div class="card"><b>Keep your records online</b><p class="hint" style="margin:6px 0 0">Once this is set up, every entry is saved to your own private online account automatically. No more backups, and you can sign in on another phone and see the same records.</p></div>';
+      h += '<div class="section-title">Setup, about 10 minutes</div><div class="card help">' +
+        '<p><b>1.</b> In Chrome, open console.firebase.google.com, sign in with your Google account and create a project. You can switch Google Analytics off.</p>' +
+        '<p><b>2.</b> Open Authentication, tap Get started, choose Email/Password, switch it on and save.</p>' +
+        '<p><b>3.</b> Open Firestore Database, tap Create database, pick a location near you and start in production mode.</p>' +
+        '<p><b>4.</b> In Firestore, open the Rules tab, replace everything with the rules below and tap Publish. They make sure only you can see your records.</p>' +
+        '<p><b>5.</b> Open Project settings (the gear), scroll to Your apps, tap the web icon &lt;/&gt;, give it a name and register it. Copy the whole firebaseConfig block it shows and paste it below.</p></div>';
+      h += '<div class="field"><label for="rules-box">Security rules for step 4</label><textarea id="rules-box" readonly rows="8" style="font-size:0.82rem">' + esc(RULES) + '</textarea></div>' +
+        '<button class="btn block" data-act="copyRules">Copy the rules</button><div style="height:14px"></div>';
+      h += '<div class="field"><label for="cfg-box">Paste the firebaseConfig block from step 5</label><textarea id="cfg-box" rows="8" placeholder="const firebaseConfig = { apiKey: ..., authDomain: ..., projectId: ..., appId: ... };"></textarea></div>' +
+        '<div id="sync-msg"></div><button class="btn primary block" data-act="syncSaveConfig">Connect</button>';
+      return h;
+    }
+    if (!s.signedIn) {
+      h += '<div id="sync-live">' + syncLive(s) + '</div>';
+      h += '<div class="card"><b>Sign in</b><p class="hint" style="margin:6px 0 10px">First time? Choose an email and password, then tap Create account. Your records on this phone are then uploaded. On another phone, use the same email and password and tap Sign in.</p>' +
+        '<div class="field"><label for="sync-email">Email</label><input id="sync-email" type="email" autocomplete="username" value="' + esc(UI.syncEmail || '') + '"></div>' +
+        '<div class="field"><label for="sync-pass">Password, at least 6 characters</label><input id="sync-pass" type="password" autocomplete="current-password"></div>' +
+        '<div id="sync-msg"></div><div class="actions"><button class="btn kiosk" data-act="syncSignUp">Create account</button><button class="btn primary" data-act="syncSignIn">Sign in</button></div>' +
+        '<button class="btn block" data-act="syncReset" style="border:0;background:none;color:var(--ink-soft)">Forgot password?</button></div>';
+      h += '<button class="btn danger block" data-act="syncRemove">Remove online setup</button>';
+      return h;
+    }
+    h += '<div id="sync-live">' + syncLive(s) + '</div>';
+    h += '<div class="actions"><button class="btn primary" data-act="syncNow">Sync now</button><button class="btn" data-act="syncSignOut">Sign out</button></div>' +
+      '<p class="hint">Changes are saved on this phone first, then sent online in the background. If you are offline, they wait and go up as soon as you are back online.</p>';
+    return h;
+  };
+  function syncMsg(t, ok) { var el = document.getElementById('sync-msg'); if (el) el.innerHTML = '<div class="' + (ok ? 'form-info' : 'form-error') + '">' + esc(t) + '</div>'; }
+  function syncAuth(kind) {
+    var em = document.getElementById('sync-email').value.trim(), pw = document.getElementById('sync-pass').value;
+    UI.syncEmail = em;
+    if (!em || !pw) { syncMsg('Type your email and password.'); return; }
+    syncMsg(kind === 'signUp' ? 'Creating your account…' : 'Signing in…', true);
+    Sync[kind](em, pw).then(function () {
+      toast(kind === 'signUp' ? 'Account created. Uploading your records.' : 'Signed in. Bringing in your records.');
+      render();
+    }, function (e) { syncMsg(e && e.message ? e.message : 'Something went wrong.'); });
+  }
+  function copyText(t) {
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(function () { toast('Copied'); }, function () { toast('Press and hold the text to copy it.'); });
+    else toast('Press and hold the text to copy it.');
+  }
 
   /* ================= Forms ================= */
   function opts(src) { return typeof src === 'string' ? (S.settings[src] || []) : src; }
@@ -891,6 +973,7 @@
   function removeSheet() {
     var el = document.getElementById('sheetwrap'); if (el) el.remove();
     UI.sheetOpen = false; FORM = null; document.body.style.overflow = '';
+    if (UI.pendingRender) { UI.pendingRender = false; render(); }
   }
   function closeSheet() { if (UI.sheetOpen) history.back(); }
   function findRec(coll, id) { var a = S[coll]; for (var i = 0; i < a.length; i++) if (a[i].id === id) return a[i]; return null; }
@@ -1038,6 +1121,28 @@
       });
       persist().then(function () { toast('Settings saved'); }); render();
     },
+    copyRules: function () { copyText(RULES); },
+    syncSaveConfig: function () {
+      var t = document.getElementById('cfg-box').value;
+      try { Sync.setConfig(t); toast('Connected to your Firebase project'); render(); }
+      catch (e) { syncMsg(e.message); }
+    },
+    syncSignUp: function () { syncAuth('signUp'); },
+    syncSignIn: function () { syncAuth('signIn'); },
+    syncReset: function () {
+      var em = document.getElementById('sync-email').value.trim();
+      if (!em) { syncMsg('Type your email first.'); return; }
+      Sync.resetPassword(em).then(function () { syncMsg('Password reset email sent to ' + em + '.', true); }, function (e) { syncMsg(e.message); });
+    },
+    syncSignOut: function () {
+      if (!confirm('Sign out? Your records stay on this phone, but stop syncing until you sign in again.')) return;
+      Sync.signOut().then(function () { render(); });
+    },
+    syncRemove: function () {
+      if (!confirm('Remove the online setup from this phone? Your records stay on this phone.')) return;
+      Sync.removeConfig();
+    },
+    syncNow: function () { Sync.syncNow(); toast('Syncing'); },
     install: function () { if (deferredInstall) { deferredInstall.prompt(); deferredInstall = null; render(); } }
   };
   function fallbackCopy() {
@@ -1111,10 +1216,12 @@
       var obj;
       try { obj = JSON.parse(reader.result); } catch (e) { toast('That file is not a backup from this app.'); return; }
       if (!obj || !Array.isArray(obj.sales)) { toast('That file is not a backup from this app.'); return; }
-      var msg = 'Restore this file?\n\nIt has ' + obj.sales.length + ' sales and ' + ((obj.agents || []).length) + ' agent entries.\n\nIt will REPLACE everything currently in the app.';
+      var msg = 'Restore this file?\n\nIt has ' + obj.sales.length + ' sales and ' + ((obj.agents || []).length) + ' agent entries.\n\nIt will REPLACE everything currently in the app' + (window.Sync && Sync.status().signedIn ? ', and your online records too.' : '.');
       if (!confirm(msg)) return;
-      var keepBackup = S.meta.lastBackup;
+      var keepBackup = S.meta.lastBackup, keepFb = S.meta.firebase, keepPend = S.meta.pending;
       S = normalize(obj); S.meta.lastBackup = S.meta.lastBackup || keepBackup;
+      if (keepFb) S.meta.firebase = keepFb; else delete S.meta.firebase;
+      S.meta.pending = keepPend || {};
       persist().then(function () { toast('Records restored'); });
       setTab('home');
     };
@@ -1126,9 +1233,19 @@
   history.replaceState({ n: 1 }, '');
   Store.get().then(function (saved) {
     S = normalize(saved); recompute(); render();
+    if (window.Sync) Sync.init({
+      getS: function () { return S; },
+      saveLocal: function () { recompute(); return Store.set(S); },
+      refresh: function () { if (UI.sheetOpen) UI.pendingRender = true; else { var typing = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName); if (typing && LISTS[cur().v]) renderList(); else if (!typing) render(); else UI.pendingRender = true; } },
+      onStatus: updateSyncBadge
+    });
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
   });
   if ('serviceWorker' in navigator) {
+    var hadController = !!navigator.serviceWorker.controller, reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (hadController && !reloading && !UI.sheetOpen) { reloading = true; location.reload(); }
+    });
     window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
   }
   window.__app = { state: function () { return S; }, results: function () { return R; } };

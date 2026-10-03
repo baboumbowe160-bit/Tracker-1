@@ -1,9 +1,11 @@
-/* Offline support: keeps the app's files on the phone so it opens without internet. */
-var CACHE = 'business-tracker-v1';
-var FILES = ['./', './index.html', './styles.css', './calc.js', './app.js', './manifest.webmanifest',
+/* Offline support: keeps the app's files (and the Firebase library) on the phone. */
+var CACHE = 'business-tracker-v2';
+var FILES = ['./', './index.html', './styles.css', './calc.js', './sync.js', './app.js', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
 self.addEventListener('install', function (e) {
-  e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(FILES); }).then(function () { return self.skipWaiting(); }));
+  e.waitUntil(caches.open(CACHE).then(function (c) {
+    return c.addAll(FILES.map(function (f) { return new Request(f, { cache: 'reload' }); }));
+  }).then(function () { return self.skipWaiting(); }));
 });
 self.addEventListener('activate', function (e) {
   e.waitUntil(caches.keys().then(function (keys) {
@@ -13,11 +15,12 @@ self.addEventListener('activate', function (e) {
 self.addEventListener('fetch', function (e) {
   if (e.request.method !== 'GET') return;
   var url = new URL(e.request.url);
-  if (url.origin !== self.location.origin) return;
-  e.respondWith(caches.match(e.request, { ignoreSearch: true }).then(function (hit) {
+  var isSdk = url.hostname === 'www.gstatic.com' && url.pathname.indexOf('/firebasejs/') === 0;
+  if (url.origin !== self.location.origin && !isSdk) return; // Firebase data traffic goes straight through
+  e.respondWith(caches.match(e.request, { ignoreSearch: !isSdk }).then(function (hit) {
     if (hit) return hit;
     return fetch(e.request).then(function (res) {
-      if (res && res.ok) { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(e.request, copy); }); }
+      if (res && (res.ok || res.type === 'opaque')) { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(e.request, copy); }); }
       return res;
     }).catch(function () {
       if (e.request.mode === 'navigate') return caches.match('./index.html');
