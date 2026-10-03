@@ -30,9 +30,9 @@
     channels: ['Wave', 'APS', 'Afrimoney', 'QMoney', 'Nafa', 'Yonna', 'ComCash', 'Bank Transfer', 'Cash', 'Other'],
     exTypes: ['Bank-to-Wallet', 'Wallet-to-Bank', 'Deposit', 'Other'],
     agentTxTypes: ['Float Transfer/Rebalancing (between wallets)', 'EVC/Voucher Transaction', 'Bank to Bank Exchange', 'Bank to Wallet Exchange', 'Wallet to Bank Exchange', 'Other'],
-    wallets: ['Wave', 'APS', 'Afrimoney - Account 1', 'Afrimoney - Account 2', 'QMoney', 'Nafa', 'ComCash', 'Yonna Wallet', 'Xpress Point', 'Suturamoney', 'Other'],
+    wallets: ['Wave', 'APS', 'Afrimoney', 'QMoney', 'Nafa', 'ComCash', 'Yonna Wallet', 'Xpress Point', 'Suturamoney', 'Other'],
     evcProviders: ['EVC Comium', 'Africell', 'Qcell', 'Other'],
-    capitalAccounts: ['Cash in hand', 'Wave', 'APS', 'Afrimoney - Account 1', 'Afrimoney - Account 2', 'QMoney', 'Nafa', 'ComCash', 'Yonna Wallet', 'Xpress Point', 'Suturamoney', 'Bank', 'EVC stock'],
+    capitalAccounts: ['Cash in hand', 'Wave', 'APS', 'Afrimoney', 'QMoney', 'Nafa', 'ComCash', 'Yonna Wallet', 'Xpress Point', 'Suturamoney', 'Bank', 'EVC stock'],
     woReasons: ['Customer unreachable/disappeared', 'Agent defaulted', 'Error-caused loss', 'Fraud/Scam', 'Business decision (waived)', 'Other'],
     errorTypes: ['Wrong amount charged', 'Wrong customer/agent billed', 'Duplicate entry', 'Wrong exchange rate', 'Wrong data bundle', 'Reconciliation mismatch', 'Other'],
     causedBy: ['Customer', 'Agent', 'Owner/Staff', 'System/Technical', 'Unclear']
@@ -40,7 +40,7 @@
   var LIST_KEYS = ['sales', 'agents', 'referrals', 'brackets', 'walletComm', 'evc', 'capital', 'errors'];
   function blankState() {
     return { app: 'business-tracker', version: 1, sales: [], agents: [], referrals: [],
-      brackets: [{ min: 1, max: 999, comm: 5 }, { min: 1000, max: 9999, comm: 25 }, { min: 10000, max: 17999, comm: 65 }],
+      brackets: [],
       walletComm: [], evc: [], capital: [], errors: [], daily: {}, recon: {}, nextSeq: 1,
       settings: JSON.parse(JSON.stringify(DEFAULT_SETTINGS)), meta: { lastBackup: null } };
   }
@@ -204,8 +204,11 @@
     var recvToday = todays.reduce(function (a, r) { return a + num(r.received) + num(r.tip); }, 0);
     h += backupBanner();
     if (!hasData) {
-      h += '<div class="card"><b>Welcome.</b><p class="hint" style="margin:6px 0 12px">Add your first sale with the yellow button, or bring in your existing records from the backup file I gave you.</p>' +
-        '<button class="btn primary" data-act="go" data-v="backup">Restore my existing records</button></div>';
+      h += '<div class="card"><b>Welcome to Business Tracker.</b><p class="hint" style="margin:6px 0 12px">Record your sales, customers, agents and commissions. It works without internet, and your records stay on this phone. ' +
+        'Start with the yellow New sale button. You can change payment channels and wallets in Settings.</p>' +
+        '<div class="actions" style="margin:0"><button class="btn primary" data-act="go" data-v="settings">Settings</button>' +
+        '<button class="btn" data-act="go" data-v="sync">Keep records online</button>' +
+        '<button class="btn" data-act="go" data-v="backup">Restore from a backup</button></div></div>';
     }
     h += '<div class="today-strip"><div><div class="label">Received today, ' + esc(shortDate(today)) + '</div><div class="big">' + money(recvToday) + '</div></div>' +
       '<div style="text-align:right"><div class="label">Entries today</div><div class="big">' + todays.length + '</div></div></div>';
@@ -599,7 +602,8 @@
           kv('Total commission', money(p.commission)) + kv('Pay the agent', '<span class="c-owed">' + money(p.agentCut) + '</span>') + kv('You keep', '<span class="c-credit">' + money(p.net) + '</span>') + '</div>';
       }).join('') : empty('Nothing to pay yet', 'Payouts appear once you add referral sales.');
     } else {
-      h += '<p class="hint">Flat deposit commission by amount. A deposit gets the commission of the highest "From" amount it reaches.</p><div class="card" id="brackets">' +
+      h += '<p class="hint">Flat deposit commission by amount. A deposit gets the commission of the highest "From" amount it reaches.' +
+        (S.brackets.length ? '' : ' No rates yet. Tap Add a row for each range, for example From 1, To 999, Commission 5.') + '</p><div class="card" id="brackets">' +
         '<div class="bracket-row" style="font-size:0.8rem;font-weight:700;color:var(--ink-soft)"><span>From (D)</span><span>To (D)</span><span>Commission (D)</span><span></span></div>' +
         S.brackets.map(bracketRow).join('') + '</div>' +
         '<div class="actions"><button class="btn" data-act="addBracket">Add a row</button><button class="btn primary" data-act="saveBrackets">Save rates</button></div>';
@@ -639,7 +643,7 @@
     return '<div class="card">' + kv('Last backup', lb ? esc(readable(lb)) : 'Never') + kv('Sales', S.sales.length) + kv('Agent entries', S.agents.length) +
       kv('Referral sales', S.referrals.length) + kv('Commission entries', S.walletComm.length + S.evc.length) + '</div>' +
       '<div class="actions"><button class="btn kiosk" data-act="backupShare">Send backup to Drive or WhatsApp</button><button class="btn primary" data-act="backupDownload">Save backup to phone</button></div>' +
-      '<div class="section-title">Restore</div><p class="hint">Use this to bring in your existing records (the file named my-records-PRIVATE.json), or to move to a new phone. It replaces everything currently in the app.</p>' +
+      '<div class="section-title">Restore</div><p class="hint">Use this to bring back a backup, or to move your records to a new phone. It replaces everything currently in the app.</p>' +
       '<button class="btn block" data-act="importBackup">Restore from a backup file</button><input type="file" id="importFile" accept=".json,application/json" hidden>' +
       '<div class="section-title">Spreadsheet</div><p class="hint">Download all sales as a spreadsheet file that opens in Excel.</p>' +
       '<button class="btn block" data-act="exportCsv">Download sales for Excel</button>';
