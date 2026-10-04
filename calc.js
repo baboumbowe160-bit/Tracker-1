@@ -44,17 +44,39 @@
       list.forEach(function (r) { cum += r.shortfall; atDate[r.date] = cum; });
       list.forEach(function (r) { r.balance = r2(atDate[r.date]); });
     });
+    // What is still unpaid on each sale: a payment covers its own sale first, any extra pays the
+    // customer's oldest unpaid sales, and leftover credit covers their next purchases.
+    Object.keys(groups).forEach(function (k) {
+      var open = [], credit = 0;
+      groups[k].forEach(function (r) {
+        var own = num(r.received) + num(r.writtenOff);
+        r.remaining = num(r.billed);
+        var use = Math.min(own, r.remaining);
+        r.remaining = r2(r.remaining - use); own = r2(own - use);
+        if (r.remaining > 0 && credit > 0) { use = Math.min(credit, r.remaining); r.remaining = r2(r.remaining - use); credit = r2(credit - use); }
+        if (r.remaining <= 0) r.clearedOn = r.date;
+        for (var i = 0; i < open.length && own > 0; i++) {
+          var o = open[i]; if (o.remaining <= 0) continue;
+          use = Math.min(own, o.remaining); o.remaining = r2(o.remaining - use); own = r2(own - use);
+          if (o.remaining <= 0) o.clearedOn = r.date;
+        }
+        if (own > 0) credit = r2(credit + own);
+        if (r.remaining > 0) open.push(r);
+        open = open.filter(function (o) { return o.remaining > 0; });
+      });
+    });
     rows.forEach(function (r) {
       var D = toDays(r.date);
-      if (!r.billedSet) { r.balance = null; r.status = ''; r.daysOverdue = null; }
-      else if (r.balance <= 0) {
-        r.status = num(r.writtenOff) > 0 ? 'Bad debt' : (r.balance < 0 ? 'Overpaid' : 'Paid');
-        r.daysOverdue = null;
-      } else {
+      if (!r.billedSet) { r.balance = null; r.status = ''; r.daysOverdue = null; r.remaining = 0; }
+      else if (r.remaining > 0) {
         r.status = T > D + 3 ? 'Overdue' : 'Outstanding';
         r.daysOverdue = Math.max(0, T - D);
+      } else {
+        r.status = num(r.writtenOff) > 0 ? 'Bad debt' : (r.balance < 0 ? 'Overpaid' : 'Paid');
+        r.daysOverdue = null;
       }
-      r.daysDelayed = r.datePaid ? Math.max(0, toDays(r.datePaid) - D) : null;
+      r.daysDelayed = r.datePaid ? Math.max(0, toDays(r.datePaid) - D)
+        : (r.billedSet && r.remaining <= 0 && r.clearedOn && r.clearedOn > r.date ? toDays(r.clearedOn) - D : null);
     });
     return rows;
   }
@@ -81,7 +103,7 @@
       c.credit = Math.max(0, -c.balance);
       c.owed = Math.max(0, c.balance);
       c.oldestUnpaid = null;
-      if (c.balance > 0) c.rows.forEach(function (r) { if (r.balance > 0 && (!c.oldestUnpaid || r.date < c.oldestUnpaid)) c.oldestUnpaid = r.date; });
+      if (c.balance > 0) c.rows.forEach(function (r) { if (r.remaining > 0 && (!c.oldestUnpaid || r.date < c.oldestUnpaid)) c.oldestUnpaid = r.date; });
       c.daysOverdue = c.oldestUnpaid ? Math.max(0, T - toDays(c.oldestUnpaid)) : null;
       c.risk = c.balance <= 0 || c.daysOverdue === null ? 'None' : c.daysOverdue > 60 ? 'High' : c.daysOverdue > 30 ? 'Medium' : c.daysOverdue > 0 ? 'Low' : 'None';
       c.tenure = Math.max(1, (T - toDays(c.first)) / 30.44);

@@ -1,6 +1,6 @@
 /* Offline support: keeps the app's files (and the Firebase library) on the phone. */
-var CACHE = 'business-tracker-v3';
-var FILES = ['./', './index.html', './styles.css', './calc.js', './sync.js', './app.js', './manifest.webmanifest',
+var CACHE = 'business-tracker-v6';
+var FILES = ['./', './index.html', './styles.css', './config.js', './calc.js', './sync.js', './app.js', './privacy.html', './delete-account.html', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) {
@@ -17,6 +17,13 @@ self.addEventListener('fetch', function (e) {
   var url = new URL(e.request.url);
   var isSdk = url.hostname === 'www.gstatic.com' && url.pathname.indexOf('/firebasejs/') === 0;
   if (url.origin !== self.location.origin && !isSdk) return; // Firebase data traffic goes straight through
+  if (url.origin === self.location.origin && /\/config\.js$/.test(url.pathname)) {
+    e.respondWith(fetch(e.request, { cache: 'no-store' }).then(function (res) {
+      if (res && res.ok) { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put('./config.js', copy); }); }
+      return res;
+    }).catch(function () { return caches.match('./config.js'); }));
+    return;
+  }
   e.respondWith(caches.match(e.request, { ignoreSearch: !isSdk }).then(function (hit) {
     if (hit) return hit;
     return fetch(e.request).then(function (res) {

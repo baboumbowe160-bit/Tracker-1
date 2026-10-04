@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#14365C">
+  <title>Privacy policy: Business Tracker</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- A plain-language starting point, not legal advice. Have it checked if you can. -->
+</head>
+<body style="padding-bottom:40px">
+  <header class="topbar"><h1>Privacy policy</h1></header>
+  <main class="help">
+    <p class="hint">Business Tracker. Last updated 3 October 2026.</p>
+    <div class="card">
+      <h3>Who we are</h3>
+      <p>Business Tracker is provided by <b data-fill="owner">the app owner</b>. Questions about your data: <a data-fill="mail" href="#">contact the app owner</a>.</p>
+
+      <h3>What the app stores</h3>
+      <p>Your account: your email address and password. The password is handled by Google's sign-in service and is never visible to us.</p>
+      <p>Your records: what you type into the app, such as sales, customer and agent names, phone numbers, amounts, commissions, cash checks, notes and settings.</p>
+      <p>The app does not collect your location, your phone contacts, or advertising or tracking data, and it shows no adverts.</p>
+
+      <h3>Where it is stored</h3>
+      <p>Your records are always kept on your phone so the app works without internet. If you sign in, they are also stored in your private account on Google Firebase (Cloud Firestore), a service run by Google. Google may store this data outside your country.</p>
+
+      <h3>Who can see your records</h3>
+      <p>Only you, when signed in. Security rules allow each account to read and change only its own records. As the operator of the online service, <span data-fill="owner">the app owner</span> has technical administrator access to the database and will only use it to keep the service running or when required by law.</p>
+      <p>We do not sell your data or share it with anyone, except Google as the service provider, or where the law requires it.</p>
+
+      <h3>Details about your customers</h3>
+      <p>If you record other people's details, such as your customers' names and phone numbers, you are responsible for having their permission and using them fairly.</p>
+
+      <h3>How long it is kept, and deleting it</h3>
+      <p>Your records are kept until you delete them or delete your account. You can delete your account and every record in it at any time:</p>
+      <p>In the app: More, then Your account, then Delete my account and records.<br>
+         On the web: <a href="delete-account.html">delete your account here</a>.</p>
+      <p>Deletion is permanent. Signing out also removes your records from that phone.</p>
+
+      <h3>Security</h3>
+      <p>Data travels between your phone and Google over encrypted connections. Keep your password private and do not reuse it elsewhere.</p>
+
+      <h3>Children</h3>
+      <p>Business Tracker is a business tool and is not intended for anyone under 18.</p>
+
+      <h3>Changes</h3>
+      <p>If this policy changes, we will update this page and the date at the top.</p>
+    </div>
+  </main>
+  <script src="config.js"></script>
+  <script>
+    (function () {
+      var c = window.APP_CONFIG || {};
+      document.querySelectorAll('[data-fill=owner]').forEach(function (e) { if (c.hasOwner) e.textContent = c.ownerName; });
+      document.querySelectorAll('[data-fill=mail]').forEach(function (e) { if (c.hasEmail) { e.textContent = c.supportEmail; e.href = 'mailto:' + c.supportEmail; } });
+    })();
+  </script>
+</body>
+</html>

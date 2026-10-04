@@ -162,9 +162,35 @@
   function byNewest(a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : (b.seq || 0) - (a.seq || 0); }
 
   /* ================= Render ================= */
+  function managed() { return !!(window.Sync && Sync.status().managed); }
+  function needsGate() {
+    if (!managed()) return false;
+    var s = Sync.status();
+    return !s.signedIn && !S.meta.ownerUid && !S.meta.skipAccount;
+  }
+  function signInForm(intro) {
+    return '<div class="card"><b>Sign in</b><p class="hint" style="margin:6px 0 10px">' + intro + '</p>' +
+      '<div class="field"><label for="sync-email">Email</label><input id="sync-email" type="email" autocomplete="username" value="' + esc(UI.syncEmail || '') + '"></div>' +
+      '<div class="field"><label for="sync-pass">Password, at least 6 characters</label><input id="sync-pass" type="password" autocomplete="current-password"></div>' +
+      '<div id="sync-msg"></div><div class="actions"><button class="btn kiosk" data-act="syncSignUp">Create account</button><button class="btn primary" data-act="syncSignIn">Sign in</button></div>' +
+      '<button class="btn block" data-act="syncReset" style="border:0;background:none;color:var(--ink-soft)">Forgot password?</button></div>';
+  }
+  function gateHTML() {
+    var s = Sync.status();
+    var note = s.phase === 'nosdk' ? '<div class="form-info">You are offline. Connect to the internet to create an account or sign in, or continue without an account for now.</div>'
+      : s.phase === 'loading' ? '<div class="form-info">Connecting…</div>' : '';
+    return '<div class="gate"><div class="gate-brand"><img src="icon-192.png" alt="" width="72" height="72"><h1>Business Tracker</h1>' +
+      '<p>Sales, customers, agents and commissions in one place. Your records are private to your account and the app works without internet.</p></div>' +
+      note + signInForm('New here? Choose an email and a password, then tap Create account. Already have an account? Tap Sign in.') +
+      '<button class="btn block" data-act="skipAccount">Continue without an account</button>' +
+      '<p class="hint" style="text-align:center;margin-top:14px">Without an account your records stay only on this phone. ' +
+      'By creating an account you accept the <a href="privacy.html" target="_blank" rel="noopener">privacy policy</a>.</p></div>';
+  }
   function render() {
     var v = cur(), root = document.getElementById('app');
+    if (needsGate()) { root.innerHTML = gateHTML(); return; }
     var title = TITLES[v.v] || '';
+    if (v.v === 'sync' && managed()) title = 'Your account';
     if (v.v === 'customer') { var c = findCustomer(v.key); title = c ? (c.name || c.phone) : 'Customer'; }
     if (v.v === 'agent') { var a = findAgent(v.key); title = a ? a.name : 'Agent'; }
     var top = '<header class="topbar">' + (UI.stack.length > 1 ? '<button class="back" data-act="back" aria-label="Back">‹</button>' : '') +
@@ -431,7 +457,7 @@
   VIEWS.more = function () {
     var ss = window.Sync ? Sync.status() : { configured: false };
     var items = [
-      ['sync', 'Online sync', ss.signedIn ? 'On: ' + ss.label + (ss.email ? ', ' + ss.email : '') : ss.configured ? 'Sign in to start syncing' : 'Save your records online, no backups needed'],
+      ['sync', ss.managed ? 'Your account' : 'Online sync', ss.signedIn ? 'On: ' + ss.label + (ss.email ? ', ' + ss.email : '') : ss.configured ? 'Sign in to start syncing' : 'Save your records online, no backups needed'],
       ['share', 'Share a statement', 'Send a customer or agent their balance on WhatsApp'],
       ['daily', 'Daily cash check', 'Opening and closing balances, to catch missing money'],
       ['recon', 'Monthly reconciliation', 'Compare your records with your statements'],
@@ -443,7 +469,10 @@
       ['settings', 'Settings', 'Payment channels, wallets and other lists'],
       ['help', 'How it works', 'Balances, credit, statuses and customer types']
     ];
-    var h = '<div class="menu">' + items.map(function (i) { return '<button data-act="go" data-v="' + i[0] + '"><b>' + i[1] + '</b><small>' + i[2] + '</small></button>'; }).join('') + '</div>';
+    if (ss.managed) items.push(['privacy', 'Privacy policy', 'How your records are stored and protected']);
+    var h = '<div class="menu">' + items.map(function (i) {
+      return '<button data-act="' + (i[0] === 'privacy' ? 'openPrivacy' : 'go') + '" data-v="' + i[0] + '"><b>' + i[1] + '</b><small>' + i[2] + '</small></button>';
+    }).join('') + '</div>';
     if (deferredInstall) h += '<button class="btn kiosk block" data-act="install">Install this app on your phone</button>';
     return h;
   };
@@ -486,9 +515,9 @@
       return 'Hello ' + name + ', thank you for doing business with us.\n\nAs of ' + date + ', your account is fully settled' +
         (c.credit > 0 ? ', and you have a credit of ' + money(c.credit) + ' with us. It will be used on your next purchase.' : '.') + '\n\nThank you!';
     }
-    var items = c.rows.filter(function (r) { return r.shortfall > 0; }).sort(byNewest);
-    var sum = items.reduce(function (a, r) { return a + r.shortfall; }, 0);
-    var lines = items.map(function (r, i) { return (i + 1) + '. ' + shortDate(r.date) + ': ' + (r.details || (r.kind === 'WE' ? 'Wallet exchange' : 'Purchase')) + ', ' + money(r.shortfall) + ' unpaid'; });
+    var items = c.rows.filter(function (r) { return r.remaining > 0; }).sort(byNewest);
+    var sum = items.reduce(function (a, r) { return a + r.remaining; }, 0);
+    var lines = items.map(function (r, i) { return (i + 1) + '. ' + shortDate(r.date) + ': ' + (r.details || (r.kind === 'WE' ? 'Wallet exchange' : 'Purchase')) + ', ' + money(r.remaining) + ' unpaid'; });
     return 'Hello ' + name + ', this is a reminder of your outstanding balance with us as of ' + date + '.\n\nUnpaid items:\n' + lines.join('\n') +
       '\n\nTotal outstanding: ' + money(c.balance) +
       (sum - c.balance > 0.005 ? '\n(Your earlier overpayment of ' + money(sum - c.balance) + ' has already been deducted.)' : '') +
@@ -666,7 +695,7 @@
     return '<div class="card help">' +
       '<h3>Balance on a sale</h3><p>Each sale shows the customer\'s whole account up to that day, across data, deposits and wallet exchanges. "Owes" means they still owe you. "Credit" means they paid you in advance or overpaid.</p>' +
       '<h3>Paying in advance</h3><p>Nothing extra to do. If a customer overpaid before, their next sale is covered automatically, even if they pay nothing that day. If the credit only covers part of it, the account shows just what is left.</p>' +
-      '<h3>Paying an old debt late</h3><p>Open the old sale and tap "Record a payment", or put the full amount on the new sale. Either way the account comes out right. Recording it on the old sale also saves how many days late it was paid.</p>' +
+      '<h3>Paying an old debt late</h3><p>Open the old sale and tap "Record a payment", or put the full amount on the new sale. A payment covers its own sale first, and anything extra pays off the oldest unpaid sales. Either way the old sale turns Paid and the app records how many days late it was paid.</p>' +
       '<h3>Statuses</h3><p>Paid: settled. Overpaid: in credit. Outstanding: unpaid for up to 3 days. Overdue: unpaid for more than 3 days. Bad debt: written off.</p>' +
       '<h3>Customer types</h3><p>Regular: 3 or more sales and at least one a month. Irregular: fewer. Inactive: no sale for 90 days. Bad (high risk): oldest unpaid sale is over 60 days old. Do not give credit: something was written off.</p>' +
       '<h3>Agents</h3><p>"Sent" is money or float you paid or sent to the agent. "Received" is what you got back. If you sent more than you received, the agent owes you.</p>' +
@@ -703,6 +732,19 @@
   }
   VIEWS.sync = function () {
     var s = Sync.status(), h = '';
+    if (s.managed) {
+      if (!s.signedIn) {
+        return signInForm('Create an account or sign in to keep your records online and on any phone. Records already on this phone are added to your account.') +
+          '<p class="hint"><a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a></p>';
+      }
+      h += '<div id="sync-live">' + syncLive(s) + '</div>';
+      h += '<div class="actions"><button class="btn primary" data-act="syncNow">Sync now</button><button class="btn" data-act="syncSignOut">Sign out</button></div>' +
+        '<p class="hint">Changes are saved on this phone first, then sent to your account in the background. Signing out removes your records from this phone; they come back when you sign in again.</p>';
+      h += '<div class="section-title">Delete account</div><div class="card"><p class="hint" style="margin:0 0 10px">This permanently deletes your account and every record in it, online and on this phone.</p>' +
+        '<button class="btn danger block" data-act="deleteAccount">Delete my account and records</button></div>' +
+        '<p class="hint"><a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a></p>';
+      return h;
+    }
     if (!s.configured) {
       h += '<div class="card"><b>Keep your records online</b><p class="hint" style="margin:6px 0 0">Once this is set up, every entry is saved to your own private online account automatically. No more backups, and you can sign in on another phone and see the same records.</p></div>';
       h += '<div class="section-title">Setup, about 10 minutes</div><div class="card help">' +
@@ -938,7 +980,7 @@
     var body = '<div id="form-error"></div>' + formBody(sc.fields, vals) + '<div id="form-info"></div>' + datalists();
     if (type === 'sale' && !isNew) {
       var cs = R.sales.filter(function (x) { return x.id === rec.id; })[0];
-      if (cs && cs.shortfall > 0) body += '<button class="btn kiosk block" data-act="recordPayment" style="margin-bottom:10px">Record a payment on this sale</button>';
+      if (cs && cs.remaining > 0) body += '<button class="btn kiosk block" data-act="recordPayment" style="margin-bottom:10px">Record a payment on this sale</button>';
       if (cs) body += '<p class="hint">Ref ID ' + esc(cs.refId) + '. Account after this sale: ' + (cs.balance > 0 ? 'owes ' + money(cs.balance) : cs.balance < 0 ? 'credit ' + money(-cs.balance) : 'settled') + '.</p>';
     }
     var foot = (!isNew && sc.coll ? '<button class="btn danger" data-act="deleteRec">Delete</button>' : '') + '<button class="btn primary" data-act="saveForm">Save</button>';
@@ -1064,7 +1106,7 @@
     recordPayment: function () {
       var rec = FORM && FORM.rec; if (!rec) return;
       var cs = R.sales.filter(function (x) { return x.id === rec.id; })[0];
-      var ans = prompt('How much did they pay now? (D)', cs ? String(cs.shortfall) : '');
+      var ans = prompt('How much did they pay now? (D)', cs ? String(cs.remaining) : '');
       if (ans === null) return;
       var amt = parseFloat(String(ans).replace(/,/g, ''));
       if (!isFinite(amt) || amt <= 0) { toast('Type an amount greater than 0.'); return; }
@@ -1139,8 +1181,30 @@
       Sync.resetPassword(em).then(function () { syncMsg('Password reset email sent to ' + em + '.', true); }, function (e) { syncMsg(e.message); });
     },
     syncSignOut: function () {
-      if (!confirm('Sign out? Your records stay on this phone, but stop syncing until you sign in again.')) return;
-      Sync.signOut().then(function () { render(); });
+      var s = Sync.status(), msg;
+      if (s.managed) msg = s.pending ? s.pending + ' change(s) have not reached your account yet. If you sign out now they will be lost. Sign out anyway?'
+        : 'Sign out? Your records are removed from this phone and come back when you sign in again.';
+      else msg = 'Sign out? Your records stay on this phone, but stop syncing until you sign in again.';
+      if (!confirm(msg)) return;
+      Sync.signOut().then(function () { UI.stack = [{ v: 'home' }]; render(); });
+    },
+    skipAccount: function () { S.meta.skipAccount = true; persist(); render(); },
+    openPrivacy: function () { window.open('privacy.html', '_blank'); },
+    deleteAccount: function () {
+      openSheet('Delete account',
+        '<div class="form-error">This permanently deletes your account and all your records, online and on this phone. It cannot be undone.</div>' +
+        '<p class="hint">If you want to keep a copy, save a backup first under More, then Backup and restore.</p>' +
+        '<div class="field"><label for="del-pass">Type your password to confirm</label><input id="del-pass" type="password" autocomplete="current-password"></div><div id="del-msg"></div>',
+        '<button class="btn" data-act="closeSheet">Cancel</button><button class="btn danger" data-act="confirmDeleteAccount">Delete everything</button>');
+    },
+    confirmDeleteAccount: function () {
+      var pw = document.getElementById('del-pass').value, box = document.getElementById('del-msg');
+      if (!pw) { box.innerHTML = '<div class="form-error">Type your password.</div>'; return; }
+      if (!confirm('Last check: delete your account and every record for good?')) return;
+      box.innerHTML = '<div class="form-info">Deleting…</div>';
+      Sync.deleteAccount(pw).then(function () {
+        UI.stack = [{ v: 'home' }]; closeSheet(); toast('Your account and records were deleted'); render();
+      }, function (e) { box.innerHTML = '<div class="form-error">' + esc(e && e.message ? e.message : 'Something went wrong.') + '</div>'; });
     },
     syncRemove: function () {
       if (!confirm('Remove the online setup from this phone? Your records stay on this phone.')) return;
@@ -1241,7 +1305,15 @@
       getS: function () { return S; },
       saveLocal: function () { recompute(); return Store.set(S); },
       refresh: function () { if (UI.sheetOpen) UI.pendingRender = true; else { var typing = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName); if (typing && LISTS[cur().v]) renderList(); else if (!typing) render(); else UI.pendingRender = true; } },
-      onStatus: updateSyncBadge
+      onStatus: updateSyncBadge,
+      resetLocal: function () { S = blankState(); recompute(); Store.set(S); return S; },
+      onAuth: function (signedIn) {
+        // Redraw only when sign-in status really changes, so typing is never wiped.
+        var first = UI.lastAuth === undefined, changed = UI.lastAuth !== signedIn;
+        UI.lastAuth = signedIn;
+        if (!changed || (first && !signedIn)) return;
+        if (UI.sheetOpen) UI.pendingRender = true; else render();
+      }
     });
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
   });

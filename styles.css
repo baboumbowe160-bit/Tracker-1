@@ -230,3 +230,11 @@ main { max-width: 680px; margin: 0 auto; padding: 12px 12px 0; }
 .sync-badge.t-credit { background: #DDF2E7; color: var(--credit); }
 .sync-badge.t-owed { background: var(--kiosk); color: var(--ink); }
 .sync-badge.t-late { background: #FBE7E5; color: var(--late); }
+
+/* Welcome and sign-in screen (built-in online account) */
+.gate { max-width: 480px; margin: 0 auto; padding: calc(env(safe-area-inset-top, 0px) + 28px) 16px 40px; }
+.gate-brand { text-align: center; margin-bottom: 18px; }
+.gate-brand img { border-radius: 18px; }
+.gate-brand h1 { font-size: 1.6rem; margin: 10px 0 6px; }
+.gate-brand p { color: var(--muted); margin: 0; font-size: 0.95rem; }
+.gate a, .help a, main a { color: var(--ink); font-weight: 700; }

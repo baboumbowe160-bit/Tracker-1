@@ -7,7 +7,7 @@
   var SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
   var COLLS = ['sales', 'agents', 'referrals', 'walletComm', 'evc', 'capital', 'errors'];
   var host = null, cfg = null, db = null, auth = null, user = null, unsub = null;
-  var lastDocs = {}, inFlight = {}, firstServerSnap = false, flushTimer = null, ver = 0, booting = false;
+  var lastDocs = {}, inFlight = {}, firstServerSnap = false, flushTimer = null, ver = 0, booting = false, managed = false;
   var st = { phase: 'off', error: '', snapPending: false, lastSynced: null, email: '' };
 
   /* ---------- helpers ---------- */
@@ -45,6 +45,9 @@
       'auth/network-request-failed': 'No internet connection. Try again when you are online.',
       'auth/operation-not-allowed': 'Email sign-in is not switched on in your Firebase project (step 2).',
       'auth/api-key-not-valid.-please-pass-a-valid-api-key.': 'The setup block is not right. Copy it again from Firebase.',
+      'auth/requires-recent-login': 'For your safety, type your password again, then try once more.',
+      'auth/user-mismatch': 'That password belongs to a different account.',
+      'auth/missing-email': 'Type your email address.',
       'permission-denied': 'Firebase refused access. Check the security rules (step 4).',
       'unavailable': 'Cannot reach Firebase right now. Your changes are kept and will sync later.'
     };
@@ -75,8 +78,9 @@
       var b = db.batch();
       ids.slice(i, i + 400).forEach(function (id) {
         sent[id] = p[id].v; inFlight[id] = p[id].v;
-        if (p[id].op === 'del' || !now[id]) b['delete'](col.doc(id));
-        else b.set(col.doc(id), Object.assign({ at: Date.now() }, now[id]));
+        var at = g.firebase.firestore.FieldValue.serverTimestamp();
+        if (p[id].op === 'del' || !now[id]) b.set(col.doc(id), { c: id.split('_')[0], del: true, at: at });
+        else b.set(col.doc(id), Object.assign({ at: at }, now[id]));
       });
       commits.push(b.commit());
     }
@@ -120,33 +124,56 @@
     if (c === 'recon' && S.recon[rest]) { delete S.recon[rest]; return true; }
     return false;
   }
+  function atMs(x) { return x && x.at && typeof x.at.toMillis === 'function' ? x.at.toMillis() : 0; }
   function listen() {
     stopListen(); firstServerSnap = false;
-    unsub = recCol().onSnapshot({ includeMetadataChanges: true }, function (snap) {
-      var S = host.getS(), p = pend(S), changed = false;
-      snap.docChanges().forEach(function (ch) {
-        var id = ch.doc.id;
-        if (p[id]) return; // this phone has a newer change waiting to go up
-        if (ch.type === 'removed') { if (removeLocal(S, id)) changed = true; delete lastDocs[id]; return; }
-        var x = ch.doc.data(), body = { c: x.c, d: x.d };
-        if (x.k !== undefined) body.k = x.k;
-        var j = stable(body);
-        if (lastDocs[id] === j) return;
-        applyLocal(S, id, body); lastDocs[id] = j; changed = true;
-      });
-      // First answer from the server: upload anything that only exists on this phone.
-      if (!firstServerSnap && !snap.metadata.fromCache) {
-        firstServerSnap = true;
-        var online = {}; snap.docs.forEach(function (d) { online[d.id] = 1; });
+    var S = host.getS(), sm = S.meta.sync || {};
+    var full = !(sm.uid === user.uid && sm.sinceAt);
+    var q = recCol();
+    // After the first full download, only ask for records changed since the last sync (5 s safety margin).
+    if (!full) q = q.where('at', '>', g.firebase.firestore.Timestamp.fromMillis(Math.max(0, sm.sinceAt - 5000)));
+    st.mode = full ? 'full' : 'changes';
+    unsub = q.onSnapshot({ includeMetadataChanges: true }, function (snap) { handle(snap, full); },
+      function (e) { st.error = friendly(e); emit(); });
+  }
+  function handle(snap, full) {
+    var S = host.getS(), p = pend(S), dataChanged = false, metaChanged = false;
+    var sm = S.meta.sync || {}, maxAt = sm.uid === user.uid && sm.sinceAt ? sm.sinceAt : 0;
+    snap.docChanges().forEach(function (ch) {
+      if (ch.type === 'removed') return; // leaving the result set is not a deletion; deletions are markers
+      var id = ch.doc.id, x = ch.doc.data(), ms = atMs(x);
+      if (ms > maxAt) maxAt = ms;
+      if (p[id]) return; // this phone has a newer change waiting to go up
+      if (x.del) { if (removeLocal(S, id)) dataChanged = true; delete lastDocs[id]; return; }
+      var body = { c: x.c, d: x.d };
+      if (x.k !== undefined) body.k = x.k;
+      var j = stable(body);
+      if (lastDocs[id] === j) return;
+      applyLocal(S, id, body); lastDocs[id] = j; dataChanged = true;
+    });
+    var switchToChanges = false;
+    if (!firstServerSnap && !snap.metadata.fromCache) {
+      firstServerSnap = true;
+      if (full) {
+        var online = {};
+        snap.docs.forEach(function (d) {
+          var x = d.data(); online[d.id] = 1;
+          // Records saved by the earlier version have no server time: re-save them once.
+          if (!x.del && !atMs(x) && lastDocs[d.id] && !p[d.id]) p[d.id] = { op: 'set', v: ++ver };
+        });
         var now = toDocs(S);
         Object.keys(now).forEach(function (id) { if (!online[id] && !p[id]) p[id] = { op: 'set', v: ++ver }; });
-        changed = true;
+        metaChanged = true; switchToChanges = true;
       }
-      st.snapPending = !!snap.metadata.hasPendingWrites;
-      if (!snap.metadata.fromCache && !snap.metadata.hasPendingWrites) st.lastSynced = Date.now();
-      if (changed) { host.saveLocal(); host.refresh(); }
-      emit(); flush();
-    }, function (e) { st.error = friendly(e); emit(); });
+    }
+    if (!snap.metadata.fromCache && maxAt && maxAt !== sm.sinceAt) { S.meta.sync = { uid: user.uid, sinceAt: maxAt }; metaChanged = true; }
+    st.snapPending = !!snap.metadata.hasPendingWrites;
+    if (!snap.metadata.fromCache && !snap.metadata.hasPendingWrites) st.lastSynced = Date.now();
+    if (dataChanged || metaChanged) host.saveLocal();
+    if (dataChanged) host.refresh();
+    emit(); flush();
+    // The full download is done; keep listening for changes only, so reconnects stay cheap.
+    if (switchToChanges && S.meta.sync && S.meta.sync.sinceAt) setTimeout(function () { if (user) listen(); }, 0);
   }
   function stopListen() { if (unsub) { try { unsub(); } catch (e) {} } unsub = null; }
 
@@ -173,9 +200,16 @@
       booting = false;
       auth.onAuthStateChanged(function (u) {
         user = u || null; st.email = u ? (u.email || '') : '';
+        if (u) {
+          var S = host.getS();
+          if (S.meta.ownerUid && S.meta.ownerUid !== u.uid) { host.resetLocal(); lastDocs = {}; inFlight = {}; }
+          S = host.getS();
+          if (S.meta.ownerUid !== u.uid) { S.meta.ownerUid = u.uid; S.meta.skipAccount = false; host.saveLocal(); }
+        }
         st.phase = u ? 'on' : 'signin';
         if (u) listen(); else stopListen();
         emit();
+        if (host.onAuth) host.onAuth(!!u);
       });
     })['catch'](function () { booting = false; db = null; auth = null; st.phase = 'nosdk'; emit(); });
   }
@@ -192,7 +226,7 @@
     else if (!online) { label = n ? 'Offline, ' + n + ' to sync' : 'Offline, saved on phone'; }
     else if (n || st.snapPending || !firstServerSnap) { label = 'Syncing'; }
     else { label = 'Synced'; tone = 'credit'; }
-    return { configured: !!cfg, phase: st.phase, label: label, tone: tone, email: st.email, pending: n,
+    return { configured: !!cfg, managed: managed, phase: st.phase, label: label, tone: tone, email: st.email, pending: n,
       error: st.error, lastSynced: st.lastSynced, signedIn: !!user };
   }
 
@@ -210,7 +244,9 @@
     init: function (h) {
       host = h;
       var S = host.getS(), d = toDocs(S);
-      cfg = S.meta.firebase || null;
+      var built = g.APP_CONFIG && g.APP_CONFIG.firebase;
+      managed = !!built;
+      cfg = built || S.meta.firebase || null;
       lastDocs = {}; Object.keys(d).forEach(function (id) { lastDocs[id] = stable(d[id]); });
       var p = S.meta.pending || {}; Object.keys(p).forEach(function (id) { if (p[id] && p[id].v > ver) ver = p[id].v; });
       window.addEventListener('online', function () { if (cfg && !db) boot(); flush(); emit(); });
@@ -219,6 +255,7 @@
     },
     track: track, schedule: schedule, status: status, toDocs: toDocs,
     setConfig: function (text) {
+      if (managed) throw new Error('This app already has its online account built in.');
       var c = parseConfig(text), S = host.getS();
       S.meta.firebase = c; cfg = c; host.saveLocal(); boot();
       return c;
@@ -232,7 +269,30 @@
     signUp: function (email, pw) { return needAuth() || auth.createUserWithEmailAndPassword(email, pw)['catch'](function (e) { throw { message: friendly(e) }; }); },
     signIn: function (email, pw) { return needAuth() || auth.signInWithEmailAndPassword(email, pw)['catch'](function (e) { throw { message: friendly(e) }; }); },
     resetPassword: function (email) { return needAuth() || auth.sendPasswordResetEmail(email)['catch'](function (e) { throw { message: friendly(e) }; }); },
-    signOut: function () { return auth ? auth.signOut() : Promise.resolve(); },
+    signOut: function () {
+      if (!auth) return Promise.resolve();
+      return auth.signOut().then(function () {
+        if (managed) { host.resetLocal(); lastDocs = {}; inFlight = {}; }
+      });
+    },
+    deleteAccount: function (pw) {
+      if (!auth || !user) return Promise.reject({ message: 'Sign in first.' });
+      var u = user, cred = g.firebase.auth.EmailAuthProvider.credential(u.email, pw);
+      return u.reauthenticateWithCredential(cred).then(function () {
+        stopListen();
+        return recCol().get();
+      }).then(function (snap) {
+        var refs = snap.docs.map(function (d) { return d.ref; }), commits = [];
+        for (var i = 0; i < refs.length; i += 400) {
+          var b = db.batch();
+          refs.slice(i, i + 400).forEach(function (r) { b['delete'](r); });
+          commits.push(b.commit());
+        }
+        return Promise.all(commits);
+      }).then(function () { return u['delete'](); })
+        .then(function () { host.resetLocal(); lastDocs = {}; inFlight = {}; user = null; st.phase = 'signin'; emit(); })
+        ['catch'](function (e) { if (user) listen(); throw { message: friendly(e) }; });
+    },
     syncNow: function () { st.error = ''; if (cfg && !db) boot(); flush(); emit(); },
     retry: function () { if (cfg && !db) boot(); }
   };

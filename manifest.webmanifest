@@ -1,4 +1,5 @@
 {
+  "id": "./",
   "name": "Business Tracker",
   "short_name": "Tracker",
   "description": "Sales, agents, debtors and commissions. Works offline.",

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#14365C">
+  <title>Delete your account: Business Tracker</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body style="padding-bottom:40px">
+  <header class="topbar"><h1>Delete your account</h1></header>
+  <main>
+    <div class="card"><b>What gets deleted</b>
+      <p class="hint" style="margin:6px 0 0">Your Business Tracker account and every record in it: sales, customers, agents, commissions, cash checks and settings. This cannot be undone. A phone that is still signed in keeps its copy until you sign out there or remove the app.</p></div>
+    <div id="self-serve">
+      <div class="section-title">Delete it now</div>
+      <div class="card">
+        <div class="field"><label for="em">Email</label><input id="em" type="email" autocomplete="username"></div>
+        <div class="field"><label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password"></div>
+        <div id="msg"></div>
+        <button class="btn danger block" id="go">Delete my account and records</button>
+      </div>
+    </div>
+    <div class="section-title">Or ask us to do it</div>
+    <p class="hint">Email <a data-fill="mail" href="#">the app owner</a> from the address you signed up with and ask for your account to be deleted. It will be deleted within 7 days.</p>
+  </main>
+  <script src="config.js"></script>
+  <script>
+    (function () {
+      var c = window.APP_CONFIG || {}, SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
+      document.querySelectorAll('[data-fill=mail]').forEach(function (e) { if (c.hasEmail) { e.textContent = c.supportEmail; e.href = 'mailto:' + c.supportEmail; } });
+      var msg = document.getElementById('msg');
+      function say(t, ok) { msg.innerHTML = '<div class="' + (ok ? 'form-info' : 'form-error') + '"></div>'; msg.firstChild.textContent = t; }
+      if (!c.firebase) { document.getElementById('self-serve').style.display = 'none'; return; }
+      function load(src) { return new Promise(function (res, rej) { var s = document.createElement('script'); s.src = src; s.async = false; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
+      var ready = load(SDK + 'firebase-app-compat.js').then(function () { return Promise.all([load(SDK + 'firebase-auth-compat.js'), load(SDK + 'firebase-firestore-compat.js')]); });
+      var errors = { 'auth/invalid-credential': 'Wrong email or password.', 'auth/wrong-password': 'Wrong email or password.', 'auth/user-not-found': 'No account with this email.',
+        'auth/invalid-email': 'That email address does not look right.', 'auth/too-many-requests': 'Too many tries. Wait a few minutes, then try again.',
+        'auth/network-request-failed': 'No internet connection. Try again when you are online.' };
+      document.getElementById('go').addEventListener('click', function () {
+        var em = document.getElementById('em').value.trim(), pw = document.getElementById('pw').value;
+        if (!em || !pw) { say('Type your email and password.'); return; }
+        if (!confirm('Delete your account and every record for good?')) return;
+        say('Deleting…', true);
+        ready.then(function () {
+          var fb = window.firebase, app = fb.apps.length ? fb.app() : fb.initializeApp(c.firebase), auth = app.auth(), db = app.firestore();
+          return auth.signInWithEmailAndPassword(em, pw).then(function (cr) {
+            var u = cr.user, col = db.collection('users').doc(u.uid).collection('records');
+            return col.get().then(function (snap) {
+              var refs = snap.docs.map(function (d) { return d.ref; }), jobs = [];
+              for (var i = 0; i < refs.length; i += 400) { var b = db.batch(); refs.slice(i, i + 400).forEach(function (r) { b['delete'](r); }); jobs.push(b.commit()); }
+              return Promise.all(jobs);
+            }).then(function () { return u['delete'](); });
+          });
+        }).then(function () {
+          say('Done. Your account and all its records have been deleted.', true);
+          document.getElementById('go').disabled = true;
+        })['catch'](function (e) { say(errors[e && e.code] || (e && e.message) || 'Could not connect. Check your internet and try again.'); });
+      });
+    })();
+  </script>
+</body>
+</html>
