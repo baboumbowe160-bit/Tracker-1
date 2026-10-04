@@ -515,9 +515,9 @@
       return 'Hello ' + name + ', thank you for doing business with us.\n\nAs of ' + date + ', your account is fully settled' +
         (c.credit > 0 ? ', and you have a credit of ' + money(c.credit) + ' with us. It will be used on your next purchase.' : '.') + '\n\nThank you!';
     }
-    var items = c.rows.filter(function (r) { return r.remaining > 0; }).sort(byNewest);
-    var sum = items.reduce(function (a, r) { return a + r.remaining; }, 0);
-    var lines = items.map(function (r, i) { return (i + 1) + '. ' + shortDate(r.date) + ': ' + (r.details || (r.kind === 'WE' ? 'Wallet exchange' : 'Purchase')) + ', ' + money(r.remaining) + ' unpaid'; });
+    var items = c.rows.filter(function (r) { return r.shortfall > 0; }).sort(byNewest);
+    var sum = items.reduce(function (a, r) { return a + r.shortfall; }, 0);
+    var lines = items.map(function (r, i) { return (i + 1) + '. ' + shortDate(r.date) + ': ' + (r.details || (r.kind === 'WE' ? 'Wallet exchange' : 'Purchase')) + ', ' + money(r.shortfall) + ' unpaid'; });
     return 'Hello ' + name + ', this is a reminder of your outstanding balance with us as of ' + date + '.\n\nUnpaid items:\n' + lines.join('\n') +
       '\n\nTotal outstanding: ' + money(c.balance) +
       (sum - c.balance > 0.005 ? '\n(Your earlier overpayment of ' + money(sum - c.balance) + ' has already been deducted.)' : '') +
@@ -695,7 +695,7 @@
     return '<div class="card help">' +
       '<h3>Balance on a sale</h3><p>Each sale shows the customer\'s whole account up to that day, across data, deposits and wallet exchanges. "Owes" means they still owe you. "Credit" means they paid you in advance or overpaid.</p>' +
       '<h3>Paying in advance</h3><p>Nothing extra to do. If a customer overpaid before, their next sale is covered automatically, even if they pay nothing that day. If the credit only covers part of it, the account shows just what is left.</p>' +
-      '<h3>Paying an old debt late</h3><p>Open the old sale and tap "Record a payment", or put the full amount on the new sale. A payment covers its own sale first, and anything extra pays off the oldest unpaid sales. Either way the old sale turns Paid and the app records how many days late it was paid.</p>' +
+      '<h3>Paying an old debt late</h3><p>Open the old sale and tap "Record a payment", or put the full amount on the new sale. Either way the account comes out right. Recording it on the old sale also saves how many days late it was paid.</p>' +
       '<h3>Statuses</h3><p>Paid: settled. Overpaid: in credit. Outstanding: unpaid for up to 3 days. Overdue: unpaid for more than 3 days. Bad debt: written off.</p>' +
       '<h3>Customer types</h3><p>Regular: 3 or more sales and at least one a month. Irregular: fewer. Inactive: no sale for 90 days. Bad (high risk): oldest unpaid sale is over 60 days old. Do not give credit: something was written off.</p>' +
       '<h3>Agents</h3><p>"Sent" is money or float you paid or sent to the agent. "Received" is what you got back. If you sent more than you received, the agent owes you.</p>' +
@@ -980,7 +980,7 @@
     var body = '<div id="form-error"></div>' + formBody(sc.fields, vals) + '<div id="form-info"></div>' + datalists();
     if (type === 'sale' && !isNew) {
       var cs = R.sales.filter(function (x) { return x.id === rec.id; })[0];
-      if (cs && cs.remaining > 0) body += '<button class="btn kiosk block" data-act="recordPayment" style="margin-bottom:10px">Record a payment on this sale</button>';
+      if (cs && cs.shortfall > 0) body += '<button class="btn kiosk block" data-act="recordPayment" style="margin-bottom:10px">Record a payment on this sale</button>';
       if (cs) body += '<p class="hint">Ref ID ' + esc(cs.refId) + '. Account after this sale: ' + (cs.balance > 0 ? 'owes ' + money(cs.balance) : cs.balance < 0 ? 'credit ' + money(-cs.balance) : 'settled') + '.</p>';
     }
     var foot = (!isNew && sc.coll ? '<button class="btn danger" data-act="deleteRec">Delete</button>' : '') + '<button class="btn primary" data-act="saveForm">Save</button>';
@@ -1106,7 +1106,7 @@
     recordPayment: function () {
       var rec = FORM && FORM.rec; if (!rec) return;
       var cs = R.sales.filter(function (x) { return x.id === rec.id; })[0];
-      var ans = prompt('How much did they pay now? (D)', cs ? String(cs.remaining) : '');
+      var ans = prompt('How much did they pay now? (D)', cs ? String(cs.shortfall) : '');
       if (ans === null) return;
       var amt = parseFloat(String(ans).replace(/,/g, ''));
       if (!isFinite(amt) || amt <= 0) { toast('Type an amount greater than 0.'); return; }
