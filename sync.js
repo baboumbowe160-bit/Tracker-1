@@ -23,7 +23,7 @@
     COLLS.forEach(function (c) { (S[c] || []).forEach(function (r) { if (r && r.id) out[c + '_' + r.id] = { c: c, d: clean(r) }; }); });
     Object.keys(S.daily || {}).forEach(function (k) { out['daily_' + k] = { c: 'daily', k: k, d: clean(S.daily[k]) }; });
     Object.keys(S.recon || {}).forEach(function (k) { out['recon_' + k] = { c: 'recon', k: k, d: clean(S.recon[k]) }; });
-    out.meta_settings = { c: 'meta', d: clean({ settings: S.settings, brackets: S.brackets }) };
+    out.meta_settings = { c: 'meta', d: clean({ settings: S.settings, brackets: S.brackets, limits: S.limits || {} }) };
     return out;
   }
   function pend(S) {
@@ -111,6 +111,7 @@
     else if (c === 'meta') {
       if (d.settings) S.settings = Object.assign({}, S.settings, d.settings);
       if (Array.isArray(d.brackets)) S.brackets = d.brackets;
+      if (d.limits && typeof d.limits === 'object') S.limits = d.limits;
     }
   }
   function removeLocal(S, id) {

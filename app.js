@@ -1,7 +1,8 @@
-/* Business Tracker – app shell. Works fully offline; data stays on this phone. */
+/* Agent & Client Tracker – app shell. Works fully offline; data stays on this phone. */
 (function () {
   'use strict';
   var C = window.Calc, num = C.num, r2 = C.r2;
+  var APP_NAME = 'Agent & Client Tracker';
 
   /* ================= Formatting ================= */
   var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -21,6 +22,8 @@
   function readable(s) { if (!s) return ''; var p = parts(s); return ord(p.d) + ' ' + MONTHS[p.m - 1] + ' ' + p.y; }
   function shortDate(s) { if (!s) return ''; var p = parts(s); return p.d + ' ' + MONTHS[p.m - 1].slice(0, 3) + ' ' + p.y; }
   function dayHead(s) { var p = parts(s); return DAYS[new Date(Date.UTC(p.y, p.m - 1, p.d)).getUTCDay()] + ', ' + ord(p.d) + ' ' + MONTHS[p.m - 1]; }
+  function addDays(s, n) { var p = parts(s), t = new Date(Date.UTC(p.y, p.m - 1, p.d + n)); return t.getUTCFullYear() + '-' + String(t.getUTCMonth() + 1).padStart(2, '0') + '-' + String(t.getUTCDate()).padStart(2, '0'); }
+  function dayShort(s) { var p = parts(s); return DAYS[new Date(Date.UTC(p.y, p.m - 1, p.d)).getUTCDay()].slice(0, 3) + ' ' + p.d + ' ' + MONTHS[p.m - 1].slice(0, 3); }
   function monthName(m) { if (!m) return ''; var p = m.split('-').map(Number); return MONTHS[p[1] - 1] + ' ' + p[0]; }
   function uid() { return 'id' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
@@ -48,6 +51,7 @@
     var out = Object.assign(blankState(), s || {});
     out.settings = Object.assign(JSON.parse(JSON.stringify(DEFAULT_SETTINGS)), (s && s.settings) || {});
     out.meta = Object.assign({ lastBackup: null }, (s && s.meta) || {});
+    if (!out.limits || typeof out.limits !== 'object') out.limits = {};
     LIST_KEYS.forEach(function (k) { if (!Array.isArray(out[k])) out[k] = []; });
     if (!out.daily || typeof out.daily !== 'object') out.daily = {};
     if (!out.recon || typeof out.recon !== 'object') out.recon = {};
@@ -106,10 +110,10 @@
   /* ================= Navigation ================= */
   var UI = { stack: [{ v: 'home' }], sheetOpen: false, salesQuery: '', salesFilter: 'all', custQuery: '', custFilter: 'all',
     agentQuery: '', limit: 120, commTab: 'wallet', refTab: 'sales', shareType: 'Customer', shareKey: '', shareText: '' };
-  var TITLES = { home: 'Business Tracker', sales: 'Sales', agents: 'Agents', customers: 'Customers', more: 'More',
+  var TITLES = { home: APP_NAME, sales: 'Sales', agents: 'Agents', customers: 'Customers', more: 'More',
     share: 'Share a statement', daily: 'Daily cash check', recon: 'Monthly reconciliation', losses: 'Losses and errors',
     comm: 'Commissions', ref: 'Referral agents', capital: 'Capital portfolio', backup: 'Backup and restore',
-    settings: 'Settings', help: 'How it works', sync: 'Online sync' };
+    settings: 'Settings', help: 'How it works', sync: 'Online sync', risk: 'Risk check' };
   function cur() { return UI.stack[UI.stack.length - 1]; }
   function go(v) { UI.stack.push(v); history.pushState({ n: UI.stack.length }, ''); render(); window.scrollTo(0, 0); }
   function setTab(t) { UI.stack = [{ v: t }]; UI.limit = 120; render(); window.scrollTo(0, 0); }
@@ -124,7 +128,22 @@
     sales: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
     agents: '<path d="M4 8h14l-3-3"/><path d="M20 16H6l3 3"/>',
     customers: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c.8-3.5 3.2-5 6-5s5.2 1.5 6 5"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.6c2.6.1 4.3 1.6 5 4.4"/>',
-    more: '<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>'
+    more: '<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    pay: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.6 2.6L16 9.6"/>',
+    chat: '<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/>',
+    cash: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6.5 9.5h.01M17.5 14.5h.01"/>',
+    recon: '<path d="M12 4v16M6 20h12M5 8h14"/><path d="M5 8l-2.5 6a3 3 0 005 0zM19 8l-2.5 6a3 3 0 005 0z"/>',
+    loss: '<path d="M12 3.5l9 16.5H3z"/><path d="M12 10v4.5M12 17.2v.01"/>',
+    comm: '<circle cx="7" cy="7" r="2.5"/><circle cx="17" cy="17" r="2.5"/><path d="M19 5L5 19"/>',
+    capital: '<circle cx="12" cy="12" r="9"/><path d="M12 3v9h9"/>',
+    backup: '<path d="M7 18a4.5 4.5 0 01-.6-8.96A6 6 0 0118 9.5a4 4 0 01-1 7.9"/><path d="M12 12v8M9 15l3-3 3 3"/>',
+    settings: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
+    help: '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 114 2.1c-1 .6-1.6 1.2-1.6 2.5M12 17v.01"/>',
+    account: '<circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c1-3.6 3.8-5.5 7-5.5s6 1.9 7 5.5"/>',
+    privacy: '<path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
+    install: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+    risk: '<path d="M4 16a8 8 0 1116 0"/><path d="M12 16l4-5"/><circle cx="12" cy="16" r="1.4"/>'
   };
   function icon(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS[n] + '</svg>'; }
   var toastTimer = null;
@@ -139,14 +158,14 @@
   function pill(text, cls) { return text ? '<span class="pill ' + (cls || 'p-paid') + '">' + esc(text) + '</span>' : ''; }
   function balanceText(b, big) {
     var cls = big ? 'big ' : 'amount ';
-    if (b > 0) return '<span class="' + cls + 'c-owed">Owes ' + money(b) + '</span>';
+    if (b > 0) return '<span class="' + cls + 'c-owed">To collect ' + money(b) + '</span>';
     if (b < 0) return '<span class="' + cls + 'c-credit">Credit ' + money(-b) + '</span>';
     return '<span class="' + (big ? 'big ' : '') + 'c-muted" style="font-weight:600">Settled</span>';
   }
   function agentNetText(n, big) {
     var cls = big ? 'big ' : 'amount ';
-    if (n > 0) return '<span class="' + cls + 'c-owed">Owes you ' + money(n) + '</span>';
-    if (n < 0) return '<span class="' + cls + '">You owe ' + money(-n) + '</span>';
+    if (n > 0) return '<span class="' + cls + 'c-owed">To collect ' + money(n) + '</span>';
+    if (n < 0) return '<span class="' + cls + '" style="color:var(--blue)">To pay ' + money(-n) + '</span>';
     return '<span class="' + cls + 'c-muted">Settled</span>';
   }
   function kv(label, value) { return '<div class="kv"><span>' + esc(label) + '</span><b>' + value + '</b></div>'; }
@@ -179,8 +198,8 @@
     var s = Sync.status();
     var note = s.phase === 'nosdk' ? '<div class="form-info">You are offline. Connect to the internet to create an account or sign in, or continue without an account for now.</div>'
       : s.phase === 'loading' ? '<div class="form-info">Connecting…</div>' : '';
-    return '<div class="gate"><div class="gate-brand"><img src="icon-192.png" alt="" width="72" height="72"><h1>Business Tracker</h1>' +
-      '<p>Sales, customers, agents and commissions in one place. Your records are private to your account and the app works without internet.</p></div>' +
+    return '<div class="gate"><div class="gate-brand"><img src="icon-192.png" alt="" width="84" height="84"><h1>' + esc(APP_NAME) + '</h1>' +
+      '<p>Record data sales, wallet transfers and agent deals. Track every debt. Works without internet.</p><div class="flagline"></div></div>' +
       note + signInForm('New here? Choose an email and a password, then tap Create account. Already have an account? Tap Sign in.') +
       '<button class="btn block" data-act="skipAccount">Continue without an account</button>' +
       '<p class="hint" style="text-align:center;margin-top:14px">Without an account your records stay only on this phone. ' +
@@ -207,7 +226,7 @@
     }).join('') + '</nav>';
   }
   function fab(v) {
-    var map = { home: ['newSale', 'New sale'], sales: ['newSale', 'New sale'], customers: ['newSale', 'New sale'], customer: ['newSaleFor', 'New sale'],
+    var map = { sales: ['newSale', 'New sale'], customers: ['newSale', 'New sale'], customer: ['newSaleFor', 'New sale'],
       agents: ['newAgent', 'New agent entry'], agent: ['newAgentFor', 'New entry'], losses: ['newError', 'Log an error'],
       capital: ['newCapital', 'New snapshot'] };
     if (v.v === 'comm') map.comm = UI.commTab === 'evc' ? ['newEvc', 'New EVC entry'] : UI.commTab === 'wallet' ? ['newWallet', 'New commission'] : null;
@@ -230,7 +249,7 @@
     var recvToday = todays.reduce(function (a, r) { return a + num(r.received) + num(r.tip); }, 0);
     h += backupBanner();
     if (!hasData) {
-      h += '<div class="card"><b>Welcome to Business Tracker.</b><p class="hint" style="margin:6px 0 12px">Record your sales, customers, agents and commissions. It works without internet, and your records stay on this phone. ' +
+      h += '<div class="card"><b>Welcome to ' + esc(APP_NAME) + '.</b><p class="hint" style="margin:6px 0 12px">Record your sales, customers, agents and commissions. It works without internet, and your records stay on this phone. ' +
         'Start with the yellow New sale button. You can change payment channels and wallets in Settings.</p>' +
         '<div class="actions" style="margin:0"><button class="btn primary" data-act="go" data-v="settings">Settings</button>' +
         '<button class="btn" data-act="go" data-v="sync">Keep records online</button>' +
@@ -238,13 +257,18 @@
     }
     h += '<div class="today-strip"><div><div class="label">Received today, ' + esc(shortDate(today)) + '</div><div class="big">' + money(recvToday) + '</div></div>' +
       '<div style="text-align:right"><div class="label">Entries today</div><div class="big">' + todays.length + '</div></div></div>';
+    h += '<div class="quick">' + qa('green', 'newSale', 'plus', 'New sale') + qa('green', 'newPayment', 'pay', 'Customer paid') +
+      qa('blue', 'newAgent', 'agents', 'Agent entry') + qa('red', 'go', 'chat', 'Send reminder', 'share') + '</div>';
     var owingCount = R.customers.filter(function (c) { return c.owed > 0; }).length;
+    var agentSplit = { collect: 0, pay: 0 };
+    R.agents.balances.forEach(function (x) { if (x.net > 0) agentSplit.collect += x.net; else agentSplit.pay -= x.net; });
+    h += riskCard();
     var lossM = (R.losses.byMonth.filter(function (x) { return x.month === month; })[0] || {}).amount || 0;
     var commM = (R.commMonths.filter(function (x) { return x.month === month; })[0] || {}).total || 0;
     h += '<div class="figures">' +
-      '<button class="figure" data-act="custFilterGo" data-v="owing" style="text-align:left"><div class="label">Customers owe you</div><div class="big c-owed">' + money(t.owed) + '</div><div class="sub">' + owingCount + ' customer' + (owingCount === 1 ? '' : 's') + '</div></button>' +
-      '<button class="figure" data-act="custFilterGo" data-v="credit" style="text-align:left"><div class="label">Customer credit you hold</div><div class="big c-credit">' + money(t.credit) + '</div><div class="sub">Paid in advance</div></button>' +
-      '<button class="figure" data-act="tab" data-v="agents" style="text-align:left"><div class="label">Agents, overall</div><div class="big ' + (t.agentNet > 0 ? 'c-owed' : '') + '">' + money(Math.abs(t.agentNet)) + '</div><div class="sub">' + (t.agentNet > 0 ? 'Agents owe you' : t.agentNet < 0 ? 'You owe agents' : 'Settled') + '</div></button>' +
+      '<button class="figure" data-act="custFilterGo" data-v="owing" style="text-align:left"><div class="label">To collect from customers</div><div class="big c-owed">' + money(t.owed) + '</div><div class="sub">' + owingCount + ' customer' + (owingCount === 1 ? '' : 's') + '</div></button>' +
+      '<button class="figure" data-act="custFilterGo" data-v="credit" style="text-align:left"><div class="label">Paid in advance by customers</div><div class="big c-credit">' + money(t.credit) + '</div><div class="sub">Used on their next purchases</div></button>' +
+      '<button class="figure" data-act="tab" data-v="agents" style="text-align:left"><div class="label">To collect from agents</div><div class="big c-owed">' + money(agentSplit.collect) + '</div><div class="sub">To pay agents: ' + money(agentSplit.pay) + '</div></button>' +
       '<button class="figure" data-act="salesFilterGo" data-v="overdue" style="text-align:left"><div class="label">Overdue sales</div><div class="big ' + (t.overdue ? 'c-late' : '') + '">' + t.overdue + '</div><div class="sub">Unpaid for over 3 days</div></button>' +
       '<button class="figure" data-act="go" data-v="losses" style="text-align:left"><div class="label">Losses this month</div><div class="big ' + (lossM ? 'c-late' : '') + '">' + money(lossM) + '</div><div class="sub">All time ' + money(R.losses.total) + '</div></button>' +
       '<button class="figure" data-act="go" data-v="comm" style="text-align:left"><div class="label">Commission this month</div><div class="big c-credit">' + money(commM) + '</div><div class="sub">All time ' + money(t.commission) + '</div></button>' +
@@ -253,6 +277,9 @@
     return h;
   };
 
+  function qa(color, act, ic, label, v) {
+    return '<button class="qa ' + color + '" data-act="' + act + '"' + (v ? ' data-v="' + v + '"' : '') + '><span class="ic">' + icon(ic) + '</span><span>' + esc(label) + '</span></button>';
+  }
   function backupBanner() {
     if (window.Sync && Sync.status().signedIn) return '';
     if (!S.sales.length && !S.agents.length) return '';
@@ -270,13 +297,13 @@
     var cols = months.map(function (k) {
       var m = map[k] || {};
       return '<div class="grp" title="' + esc(monthName(k)) + '">' +
-        '<div class="bar" style="background:var(--ink);height:' + (num(m.billed) / max * 100).toFixed(1) + '%"></div>' +
+        '<div class="bar" style="background:var(--blue);height:' + (num(m.billed) / max * 100).toFixed(1) + '%"></div>' +
         '<div class="bar" style="background:var(--credit);height:' + (num(m.received) / max * 100).toFixed(1) + '%"></div></div>';
     }).join('');
     var labels = months.map(function (k) { return '<span>' + MONTHS[Number(k.slice(5)) - 1].slice(0, 3) + '</span>'; }).join('');
     var cur = map[R.today.slice(0, 7)] || {};
     return '<div class="chart"><h3>Billed and received, last 6 months</h3>' +
-      '<div class="legend"><span><i style="background:var(--ink)"></i>Billed</span><span><i style="background:var(--credit)"></i>Received</span>' + (max > 1 ? '<span>Highest: ' + compact(max) + '</span>' : '') + '</div>' +
+      '<div class="legend"><span><i style="background:var(--blue)"></i>Billed</span><span><i style="background:var(--credit)"></i>Received</span>' + (max > 1 ? '<span>Highest: ' + compact(max) + '</span>' : '') + '</div>' +
       '<div class="cols" role="img" aria-label="Billed and received by month">' + cols + '</div><div class="col-labels">' + labels + '</div>' +
       '<p class="hint" style="margin:8px 0 0">This month: billed ' + money(cur.billed || 0) + ', received ' + money(cur.received || 0) + '.</p></div>';
   }
@@ -289,7 +316,7 @@
   function chartTopOwing() {
     var top = R.customers.filter(function (c) { return c.owed > 0; }).slice(0, 5);
     if (!top.length) return '';
-    return '<div class="chart"><h3>Who owes you the most</h3><p class="hint" style="margin:0 0 6px">Chase these first.</p>' +
+    return '<div class="chart"><h3>Biggest amounts to collect</h3><p class="hint" style="margin:0 0 6px">Chase these first.</p>' +
       hbars(top.map(function (c) { return { label: c.name || c.phone, value: c.owed, text: money(c.owed) }; }), 'var(--owed)') + '</div>';
   }
   function chartCustomerMix() {
@@ -310,9 +337,9 @@
   /* ----- Sales ----- */
   VIEWS.sales = function () {
     return '<input class="search" id="q-sales" type="search" placeholder="Search name, phone or ref" aria-label="Search sales" value="' + esc(UI.salesQuery) + '">' +
-      '<div class="chips">' + [['all', 'All'], ['owing', 'Owing'], ['overdue', 'Overdue'], ['overpaid', 'Overpaid'], ['DS', 'Data / deposit'], ['WE', 'Wallet exchange']].map(function (c) {
+      '<div class="chips">' + [['all', 'All'], ['owing', 'Not paid'], ['overdue', 'Overdue'], ['overpaid', 'Overpaid'], ['DS', 'Data / deposit'], ['WE', 'Wallet exchange']].map(function (c) {
         return '<button data-act="salesFilter" data-v="' + c[0] + '" class="' + (UI.salesFilter === c[0] ? 'on' : '') + '">' + c[1] + '</button>';
-      }).join('') + '</div><div id="list"></div>';
+      }).join('') + '</div><button class="btn block" data-act="openBatch" style="margin-bottom:10px">Record several sales at once</button><div id="list"></div>';
   };
   var LISTS = {};
   LISTS.sales = function () {
@@ -355,7 +382,7 @@
     var delayed = r.daysDelayed ? ', paid ' + r.daysDelayed + ' days late' : '';
     return '<button class="row" data-act="editSale" data-id="' + esc(r.id) + '">' +
       '<div class="top"><div><div class="name">' + esc(r.name || 'No name') + '</div><div class="detail">' + esc(what) + ', ' + esc(r.refId) + '</div></div>' + pill(r.status, STATUS_CLASS[r.status]) + '</div>' +
-      '<div class="bottom"><span class="c-muted num">Billed ' + money(r.billed) + ', paid ' + money(num(r.received)) + esc(late) + esc(delayed) + '</span>' +
+      '<div class="bottom"><span class="c-muted num">' + (r.billedSet && num(r.billed) === 0 ? 'Paid ' + money(num(r.received)) : 'Billed ' + money(r.billed) + ', paid ' + money(num(r.received))) + esc(late) + esc(delayed) + '</span>' +
       (r.billedSet ? balanceText(r.balance) : '') + '</div></button>';
   }
 
@@ -363,10 +390,10 @@
   VIEWS.customers = function () {
     var t = R.totals;
     return '<input class="search" id="q-cust" type="search" placeholder="Search name or phone" aria-label="Search customers" value="' + esc(UI.custQuery) + '">' +
-      '<div class="chips">' + [['all', 'All'], ['owing', 'Owing'], ['credit', 'In credit'], ['Regular', 'Regular'], ['Irregular', 'Irregular'], ['bad', 'Bad or no credit']].map(function (c) {
+      '<div class="chips">' + [['all', 'All'], ['owing', 'To collect'], ['credit', 'Paid in advance'], ['Regular', 'Regular'], ['Irregular', 'Irregular'], ['bad', 'Bad or no credit']].map(function (c) {
         return '<button data-act="custFilter" data-v="' + c[0] + '" class="' + (UI.custFilter === c[0] ? 'on' : '') + '">' + c[1] + '</button>';
       }).join('') + '</div>' +
-      '<p class="hint">' + R.customers.length + ' customers. They owe you ' + money(t.owed) + '; you hold ' + money(t.credit) + ' of their credit.</p><div id="list"></div>';
+      '<p class="hint">' + R.customers.length + ' customers. To collect: ' + money(t.owed) + '. Paid in advance: ' + money(t.credit) + '.</p><div id="list"></div>';
   };
   LISTS.customers = function () {
     var q = UI.custQuery.trim().toLowerCase(), f = UI.custFilter;
@@ -394,9 +421,11 @@
       '<div><span>Total billed</span><b>' + money(c.billed) + '</b></div><div><span>Total received</span><b>' + money(c.received) + '</b></div>' +
       '<div><span>Written off</span><b>' + money(c.writtenOff) + '</b></div><div><span>Sales</span><b>' + c.txns + '</b></div>' +
       '<div><span>First sale</span><b>' + esc(shortDate(c.first)) + '</b></div><div><span>Last sale</span><b>' + esc(shortDate(c.last)) + '</b></div>' +
-      '<div><span>Sales per month</span><b>' + c.frequency.toFixed(1) + '</b></div><div><span>Risk</span><b>' + esc(c.risk) + '</b></div>' +
+      '<div><span>Sales per month</span><b>' + c.frequency.toFixed(1) + '</b></div><div><span>Risk</span><b>' + esc((riskFor(c.key) || {}).level || 'Low') + '</b></div>' +
       (c.oldestUnpaid ? '<div><span>Oldest unpaid</span><b>' + esc(shortDate(c.oldestUnpaid)) + '</b></div><div><span>Days overdue</span><b>' + c.daysOverdue + '</b></div>' : '') +
-      '</div><div class="actions"><button class="btn primary" data-act="shareFor" data-type="Customer" data-key="' + esc(c.key) + '">Share statement</button></div></div>';
+      '</div><div class="actions"><button class="btn kiosk" data-act="newPaymentFor" data-key="' + esc(c.key) + '">Customer paid</button>' +
+      '<button class="btn primary" data-act="shareFor" data-type="Customer" data-key="' + esc(c.key) + '">Share statement</button></div></div>';
+    h += riskBlock(riskFor(c.key));
     h += '<div class="section-title">Their sales, newest first</div>';
     h += c.rows.slice().sort(byNewest).map(saleRow).join('');
     return h;
@@ -435,11 +464,17 @@
     if (rows.length > shown.length) h += '<button class="more-btn" data-act="showMore">Show more (' + (rows.length - shown.length) + ' older)</button>';
     return h;
   }
+  function gaveGot(r) {
+    var p = [];
+    if (num(r.toAgent)) p.push('You gave ' + money(num(r.toAgent)));
+    if (num(r.fromAgent)) p.push('You got ' + money(num(r.fromAgent)));
+    return p.join(', ') || 'No amounts';
+  }
   function agentRow(r) {
-    var effect = !r.hasNet ? '' : r.net > 0 ? '<span class="amount c-owed">+' + money(r.net) + '</span>' : r.net < 0 ? '<span class="amount">' + money(r.net) + '</span>' : '<span class="c-muted">Even</span>';
+    var effect = '';
     return '<button class="row" data-act="editAgent" data-id="' + esc(r.id) + '"><div class="top"><div><div class="name">' + esc(r.name || 'No name') + '</div>' +
-      '<div class="detail">' + esc(r.desc || r.txType || 'Entry') + (r.txNumber ? ', via ' + esc(r.txNumber) : '') + ', ' + esc(r.refId) + '</div></div>' + effect + '</div>' +
-      '<div class="bottom"><span class="c-muted num">Sent ' + money(num(r.toAgent)) + ', received ' + money(num(r.fromAgent)) + '</span></div></button>';
+      '<div class="detail">' + esc(r.desc || r.txType || 'Entry') + (r.txNumber ? ', received on ' + esc(C.gmNormalize(r.txNumber) || r.txNumber) : '') + ', ' + esc(r.refId) + '</div></div>' + effect + '</div>' +
+      '<div class="bottom"><span class="num">' + esc(gaveGot(r)) + '</span></div></button>';
   }
   VIEWS.agent = function (v) {
     var a = findAgent(v.key);
@@ -449,7 +484,7 @@
       '<div>' + agentNetText(a.net, true) + '</div><div class="stats"><div><span>Entries</span><b>' + a.entries + '</b></div><div><span>Last entry</span><b>' + esc(shortDate(a.last)) + '</b></div>' +
       '<div><span>Written off</span><b>' + money(a.writtenOff) + '</b></div></div>' +
       '<div class="actions"><button class="btn primary" data-act="shareFor" data-type="Agent" data-key="' + esc(a.key) + '">Share statement</button></div></div>' +
-      '<p class="hint">A plus amount means that entry added to what the agent owes you. A minus amount means it added to what you owe the agent.</p>' +
+      '<p class="hint">"You gave" is money or float you sent to them. "You got" is money they sent to you. "To collect" means they must pay you; "To pay" means you must pay them.</p>' +
       rows.map(agentRow).join('');
   };
 
@@ -457,21 +492,22 @@
   VIEWS.more = function () {
     var ss = window.Sync ? Sync.status() : { configured: false };
     var items = [
-      ['sync', ss.managed ? 'Your account' : 'Online sync', ss.signedIn ? 'On: ' + ss.label + (ss.email ? ', ' + ss.email : '') : ss.configured ? 'Sign in to start syncing' : 'Save your records online, no backups needed'],
-      ['share', 'Share a statement', 'Send a customer or agent their balance on WhatsApp'],
-      ['daily', 'Daily cash check', 'Opening and closing balances, to catch missing money'],
-      ['recon', 'Monthly reconciliation', 'Compare your records with your statements'],
-      ['losses', 'Losses and errors', 'Write-offs, error log and losses per month'],
-      ['comm', 'Commissions', 'Mobile wallets and EVC, with totals per month'],
-      ['ref', 'Referral agents', 'Sales you do for other agents, and what you owe them'],
-      ['capital', 'Capital portfolio', 'Available and working capital'],
-      ['backup', 'Backup and restore', 'Save your records, or bring them back'],
-      ['settings', 'Settings', 'Payment channels, wallets and other lists'],
-      ['help', 'How it works', 'Balances, credit, statuses and customer types']
+      ['sync', ss.managed ? 'Your account' : 'Online sync', ss.signedIn ? ss.label : ss.configured ? 'Sign in to sync' : 'Keep records online', 'account', 'blue'],
+      ['risk', 'Risk check', 'Who might not pay, credit limits', 'risk', 'red'],
+      ['share', 'Share a statement', 'Balance reminders on WhatsApp', 'chat', 'green'],
+      ['daily', 'Daily cash check', 'Catch missing money', 'cash', 'green'],
+      ['comm', 'Commissions', 'Wallets and EVC', 'comm', 'green'],
+      ['ref', 'Referral agents', 'Sales for other agents', 'customers', 'blue'],
+      ['recon', 'Monthly reconciliation', 'Match your statements', 'recon', 'blue'],
+      ['losses', 'Losses and errors', 'Write-offs and mistakes', 'loss', 'red'],
+      ['capital', 'Capital portfolio', 'Available and working capital', 'capital', 'blue'],
+      ['backup', 'Backup and restore', 'Save or bring back records', 'backup', 'blue'],
+      ['settings', 'Settings', 'Channels, wallets, lists', 'settings', 'blue'],
+      ['help', 'How it works', 'Balances, credit, statuses', 'help', 'blue']
     ];
-    if (ss.managed) items.push(['privacy', 'Privacy policy', 'How your records are stored and protected']);
-    var h = '<div class="menu">' + items.map(function (i) {
-      return '<button data-act="' + (i[0] === 'privacy' ? 'openPrivacy' : 'go') + '" data-v="' + i[0] + '"><b>' + i[1] + '</b><small>' + i[2] + '</small></button>';
+    if (ss.managed) items.push(['privacy', 'Privacy policy', 'How your records are protected', 'privacy', 'blue']);
+    var h = '<div class="tiles">' + items.map(function (i) {
+      return '<button class="tile ' + i[4] + '" data-act="' + (i[0] === 'privacy' ? 'openPrivacy' : 'go') + '" data-v="' + i[0] + '"><span class="ic">' + icon(i[3]) + '</span><b>' + i[1] + '</b><small>' + esc(i[2]) + '</small></button>';
     }).join('') + '</div>';
     if (deferredInstall) h += '<button class="btn kiosk block" data-act="install">Install this app on your phone</button>';
     return h;
@@ -480,8 +516,8 @@
   /* ----- Share ----- */
   VIEWS.share = function () {
     var isC = UI.shareType === 'Customer';
-    var opts = isC ? R.customers.map(function (c) { return [c.key, (c.name || 'No name') + (c.phone ? ' (' + c.phone + ')' : '') + (c.owed > 0 ? ', owes ' + money(c.owed) : c.credit > 0 ? ', credit ' + money(c.credit) : '')]; })
-      : R.agents.balances.map(function (a) { return [a.key, a.name + (a.net > 0 ? ', owes you ' + money(a.net) : a.net < 0 ? ', you owe ' + money(-a.net) : ', settled')]; });
+    var opts = isC ? R.customers.map(function (c) { return [c.key, (c.name || 'No name') + (c.phone ? ' (' + c.phone + ')' : '') + (c.owed > 0 ? ', to collect ' + money(c.owed) : c.credit > 0 ? ', paid in advance ' + money(c.credit) : '')]; })
+      : R.agents.balances.map(function (a) { return [a.key, a.name + (a.net > 0 ? ', to collect ' + money(a.net) : a.net < 0 ? ', to pay ' + money(-a.net) : ', settled')]; });
     if (UI.shareKey && !opts.some(function (o) { return o[0] === UI.shareKey; })) UI.shareKey = '';
     if (!UI.shareKey && opts.length) UI.shareKey = opts[0][0];
     if (!UI.shareText) UI.shareText = buildMessage();
@@ -500,9 +536,10 @@
     var raw = '';
     if (UI.shareType === 'Customer') { var c = findCustomer(UI.shareKey); raw = c ? c.phone : ''; }
     else { var a = findAgent(UI.shareKey); raw = a ? a.phone : ''; }
-    var d = String(raw || '').replace(/\D/g, '');
+    var d = C.gmNormalize(raw);
     if (!d) return '';
-    if (d.length <= 7 && S.settings.countryCode) d = String(S.settings.countryCode).replace(/\D/g, '') + d;
+    var cc = String(S.settings.countryCode || '').replace(/\D/g, '');
+    if (cc && d.indexOf(cc) !== 0 && d.length <= 9) d = cc + d;
     return d;
   }
   function buildMessage() {
@@ -513,13 +550,13 @@
     var name = c.name || 'there', date = readable(R.today);
     if (c.balance <= 0) {
       return 'Hello ' + name + ', thank you for doing business with us.\n\nAs of ' + date + ', your account is fully settled' +
-        (c.credit > 0 ? ', and you have a credit of ' + money(c.credit) + ' with us. It will be used on your next purchase.' : '.') + '\n\nThank you!';
+        (c.credit > 0 ? '. You have ' + money(c.credit) + ' with us that you paid in advance. It will be used on your next purchase.' : '.') + '\n\nThank you!';
     }
-    var items = c.rows.filter(function (r) { return r.shortfall > 0; }).sort(byNewest);
-    var sum = items.reduce(function (a, r) { return a + r.shortfall; }, 0);
-    var lines = items.map(function (r, i) { return (i + 1) + '. ' + shortDate(r.date) + ': ' + (r.details || (r.kind === 'WE' ? 'Wallet exchange' : 'Purchase')) + ', ' + money(r.shortfall) + ' unpaid'; });
+    var items = c.rows.filter(function (r) { return r.remaining > 0; }).sort(byNewest);
+    var sum = items.reduce(function (a, r) { return a + r.remaining; }, 0);
+    var lines = items.map(function (r, i) { return (i + 1) + '. ' + shortDate(r.date) + ': ' + (r.details || (r.kind === 'WE' ? 'Wallet exchange' : 'Purchase')) + ', ' + money(r.remaining) + ' not yet paid'; });
     return 'Hello ' + name + ', this is a reminder of your outstanding balance with us as of ' + date + '.\n\nUnpaid items:\n' + lines.join('\n') +
-      '\n\nTotal outstanding: ' + money(c.balance) +
+      '\n\nTotal you need to pay: ' + money(c.balance) +
       (sum - c.balance > 0.005 ? '\n(Your earlier overpayment of ' + money(sum - c.balance) + ' has already been deducted.)' : '') +
       '\n\nKindly settle at your earliest convenience. Thank you!';
   }
@@ -527,11 +564,14 @@
     var rows = R.agents.rows.filter(function (r) { return C.agentKey(r.name) === a.key && r.hasNet; }).sort(byNewest);
     var shown = rows.slice(0, 25);
     var lines = shown.map(function (r, i) {
-      return (i + 1) + '. ' + shortDate(r.date) + ': ' + (r.desc || r.txType || 'Entry') + ', ' + (r.net > 0 ? 'you owe us ' + money(r.net) : r.net < 0 ? 'we owe you ' + money(-r.net) : 'even');
+      var p = [];
+      if (num(r.toAgent)) p.push('we gave you ' + money(num(r.toAgent)));
+      if (num(r.fromAgent)) p.push('you gave us ' + money(num(r.fromAgent)));
+      return (i + 1) + '. ' + shortDate(r.date) + ': ' + (r.desc || r.txType || 'Entry') + ', ' + (p.join(', ') || 'no amount');
     });
-    var foot = a.net > 0 ? 'Total you owe us: ' + money(a.net) + '\n\nKindly settle at your earliest convenience. Thank you!'
-      : a.net < 0 ? 'Total we owe you: ' + money(-a.net) + '\n\nWe will settle this with you soon. Thank you for your patience!'
-      : 'Your account with us is fully settled. Thank you!';
+    var foot = a.net > 0 ? 'Balance: you need to pay us ' + money(a.net) + '.\n\nKindly pay at your earliest convenience. Thank you!'
+      : a.net < 0 ? 'Balance: we will pay you ' + money(-a.net) + '.\n\nWe will pay you soon. Thank you for your patience!'
+      : 'Balance: nothing to pay on either side. Thank you!';
     return 'Hello ' + a.name + ', here is a summary of your agent account as of ' + readable(R.today) + '.\n\n' +
       (lines.length ? 'Recent entries:\n' + lines.join('\n') + (rows.length > 25 ? '\n(Showing the 25 most recent of ' + rows.length + ' entries.)' : '') + '\n\n' : '') + foot;
   }
@@ -650,10 +690,10 @@
     var h = '<p class="hint">Record your balances whenever you like. Receivables and payables always use today\'s live totals.</p>';
     h += '<div class="figures">' +
       '<div class="figure wide"><div class="label">Working capital' + (latest ? ', from your ' + esc(shortDate(latest.date)) + ' snapshot' : '') + '</div><div class="big ' + (latest && latest.working < 0 ? 'c-late' : 'c-credit') + '">' + (latest ? money(latest.working) : 'Not recorded') + '</div>' +
-      '<div class="sub">Available capital plus what you are owed, minus what you owe</div></div>' +
+      '<div class="sub">Available capital, plus money to collect, minus money to pay</div></div>' +
       '<div class="figure"><div class="label">Available capital</div><div class="big">' + (latest ? money(latest.available) : '—') + '</div></div>' +
-      '<div class="figure"><div class="label">You are owed</div><div class="big c-owed">' + money(cap.receivables) + '</div><div class="sub">Customers and agents</div></div>' +
-      '<div class="figure wide"><div class="label">You owe</div><div class="big">' + money(cap.payables) + '</div><div class="sub">Agents, plus customer credit you hold</div></div></div>';
+      '<div class="figure"><div class="label">To collect</div><div class="big c-owed">' + money(cap.receivables) + '</div><div class="sub">From customers and agents</div></div>' +
+      '<div class="figure wide"><div class="label">To pay</div><div class="big">' + money(cap.payables) + '</div><div class="sub">To agents, plus what customers paid in advance</div></div></div>';
     h += '<div class="section-title">Snapshots</div>';
     h += cap.rows.length ? cap.rows.map(function (s) {
       return '<button class="row" data-act="editCapital" data-id="' + esc(s.id) + '"><div class="top"><div class="name">' + esc(readable(s.date)) + '</div><span class="amount">' + money(s.available) + '</span></div>' +
@@ -693,12 +733,16 @@
   /* ----- Help ----- */
   VIEWS.help = function () {
     return '<div class="card help">' +
-      '<h3>Balance on a sale</h3><p>Each sale shows the customer\'s whole account up to that day, across data, deposits and wallet exchanges. "Owes" means they still owe you. "Credit" means they paid you in advance or overpaid.</p>' +
+      '<h3>To collect and to pay</h3><p>"To collect" is money someone must still pay you. "To pay" is money you must still pay someone. "Credit" means a customer paid you in advance.</p>' +
+      '<h3>Choosing the date</h3><p>New entries have no date until you tap Today, Yesterday or Other date, so a past sale is never saved with today\'s date by mistake. The Save button shows the date you chose.</p>' +
+      '<h3>Phone numbers</h3><p>Since 4 September 2026, Africell numbers start with 87, QCell with 83 and Comium with 86. Gamcel numbers stay 7 digits. Type the old 7-digit number and the app adds the right start for you when you leave the box. Old and new forms of a number count as the same person.</p>' +
+      '<h3>Risk check</h3><p>Each customer gets a risk score from what they owe, how long it has been unpaid, late payments and write-offs. Low risk can get credit up to their limit; High risk should pay on the spot. You can change any customer\'s credit limit.</p>' +
       '<h3>Paying in advance</h3><p>Nothing extra to do. If a customer overpaid before, their next sale is covered automatically, even if they pay nothing that day. If the credit only covers part of it, the account shows just what is left.</p>' +
-      '<h3>Paying an old debt late</h3><p>Open the old sale and tap "Record a payment", or put the full amount on the new sale. Either way the account comes out right. Recording it on the old sale also saves how many days late it was paid.</p>' +
+      '<h3>Recording quickly</h3><p>New sales start as "Paid in full now". Untick it only when the customer pays part or nothing. "Save, add another" keeps the form open with the same date. Use "Customer paid" when someone pays off what they owe without buying anything.</p>' +
+      '<h3>Paying an old debt late</h3><p>Open the old sale and tap "Record a payment", or put the full amount on the new sale. A payment covers its own sale first, and anything extra pays off the oldest unpaid sales. Either way the old sale turns Paid and the app records how many days late it was paid.</p>' +
       '<h3>Statuses</h3><p>Paid: settled. Overpaid: in credit. Outstanding: unpaid for up to 3 days. Overdue: unpaid for more than 3 days. Bad debt: written off.</p>' +
       '<h3>Customer types</h3><p>Regular: 3 or more sales and at least one a month. Irregular: fewer. Inactive: no sale for 90 days. Bad (high risk): oldest unpaid sale is over 60 days old. Do not give credit: something was written off.</p>' +
-      '<h3>Agents</h3><p>"Sent" is money or float you paid or sent to the agent. "Received" is what you got back. If you sent more than you received, the agent owes you.</p>' +
+      '<h3>Agents</h3><p>"You gave" is money or float you sent to the agent. "You got" is what they sent you. If you gave more than you got, it shows as To collect; if you got more, it shows as To pay.</p>' +
       '<h3>EVC</h3><p>Commission = purchase x return rate. Royalty = retail part x retail royalty rate, plus wholesale part x wholesale royalty rate. On the wholesale part, the rest goes to the wholesaler.</p>' +
       '<h3>Your data</h3><p>Everything stays on this phone and works without internet. Back it up every week from More, then Backup and restore.</p></div>';
   };
@@ -790,65 +834,217 @@
     else toast('Press and hold the text to copy it.');
   }
 
+  /* ================= Phone networks ================= */
+  var NETS = [['Africell', '87'], ['QCell', '83'], ['Comium', '86'], ['Gamcel', '']];
+  function netLine(v) {
+    var d = C.gmDigits(v); if (d.length < 7) return '';
+    var n = C.gmNetwork(v);
+    var h = '<span class="netpill">' + (n ? esc(n.name) + (n.prefix ? ' ' + n.prefix : '') : 'Network not known') + '</span><span class="netq">Not right?</span>';
+    return h + NETS.filter(function (x) { return !n || x[0] !== n.name; }).map(function (x) {
+      return '<button type="button" class="netbtn" data-act="setNet" data-v="' + x[1] + '">' + x[0] + '</button>';
+    }).join('');
+  }
+  function updateNet(inp) { var line = inp.closest('.field') && inp.closest('.field').querySelector('.netline'); if (line) line.innerHTML = netLine(inp.value); }
+
+  /* ================= Risk ================= */
+  function riskFor(key) { var l = R.risk.customers; for (var i = 0; i < l.length; i++) if (l[i].key === key) return l[i]; return null; }
+  var RISK_PILL = { High: 'p-overdue', Medium: 'p-outstanding', Low: 'p-paid' };
+  function limitText(rk) {
+    if (!rk) return '';
+    if (rk.limit <= 0) return 'No credit: pay on the spot';
+    return 'Credit limit ' + money(rk.limit) + (rk.manual !== null ? ' (set by you)' : ' (suggested)');
+  }
+  function riskBlock(rk) {
+    if (!rk) return '';
+    return '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><b>Risk</b>' + pill(rk.level + ' risk', RISK_PILL[rk.level]) + '</div>' +
+      kv('Credit', esc(limitText(rk))) + (rk.over ? '<div class="form-error" style="margin:8px 0 0">Over the credit limit by ' + money(rk.owed - rk.limit) + '</div>' : '') +
+      (rk.reasons.length ? '<ul class="reasons">' + rk.reasons.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '<p class="hint" style="margin:8px 0 0">No warning signs.</p>') +
+      '<div class="actions" style="margin-bottom:0"><button class="btn" data-act="setLimit" data-key="' + esc(rk.key) + '">Set credit limit</button></div></div>';
+  }
+  function creditWarning(c, sf) {
+    if (!FORM || !FORM.isNew || !(sf > 0)) return '';
+    var rk = riskFor(c.key); if (!rk) return '';
+    var newOwed = r2(c.owed + sf), msgs = [];
+    if (rk.level === 'High') msgs.push(esc(c.name) + ' is high risk. Ask for payment now instead of giving credit.');
+    if (newOwed > rk.limit) msgs.push('This goes over their credit limit of ' + money(rk.limit) + '. They would have ' + money(newOwed) + ' to pay.');
+    return msgs.length ? '<div class="form-error">' + msgs.join(' ') + '</div>' : '';
+  }
+  function riskCard() {
+    var al = R.risk.alerts; if (!al.length) return '';
+    return '<div class="card risk-card"><b>Risk alerts</b>' + al.slice(0, 3).map(function (x) {
+      return '<div class="alert ' + x.level.toLowerCase() + '"><i></i><span>' + esc(x.text) + '</span></div>';
+    }).join('') + '<button class="btn block" data-act="go" data-v="risk" style="margin-top:8px">Open risk check</button></div>';
+  }
+  VIEWS.risk = function () {
+    var rk = R.risk, s = rk.summary, h = '';
+    h += '<div class="figures">' +
+      '<div class="figure"><div class="label">High risk customers</div><div class="big ' + (s.high ? 'c-owed' : '') + '">' + s.high + '</div></div>' +
+      '<div class="figure"><div class="label">Medium risk customers</div><div class="big">' + s.medium + '</div></div>' +
+      '<div class="figure wide"><div class="label">Money at risk</div><div class="big ' + (s.atRisk ? 'c-owed' : 'c-credit') + '">' + money(s.atRisk) + '</div><div class="sub">To collect from medium and high risk customers</div></div></div>';
+    h += '<div class="section-title">Warnings</div>';
+    h += rk.alerts.length ? '<div class="card">' + rk.alerts.map(function (x) { return '<div class="alert ' + x.level.toLowerCase() + '"><i></i><span>' + esc(x.text) + '</span></div>'; }).join('') + '</div>'
+      : '<p class="hint">No warnings right now.</p>';
+    var list = rk.customers.filter(function (c) { return c.owed > 0 || c.level !== 'Low'; });
+    h += '<div class="section-title">Customers</div>';
+    h += list.length ? list.map(function (c) {
+      return '<div class="card"><div class="top" style="display:flex;justify-content:space-between;gap:10px"><div><b>' + esc(c.name || c.phone) + '</b><div class="hint" style="margin:0">' + esc(limitText(c)) + '</div></div>' +
+        '<div style="text-align:right">' + pill(c.level + ' risk', RISK_PILL[c.level]) + '<div class="amount c-owed" style="margin-top:4px">' + (c.owed > 0 ? 'To collect ' + money(c.owed) : '') + '</div></div></div>' +
+        (c.over ? '<div class="form-error" style="margin:8px 0 0">Over the credit limit by ' + money(c.owed - c.limit) + '</div>' : '') +
+        (c.reasons.length ? '<ul class="reasons">' + c.reasons.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '') +
+        '<div class="actions" style="margin-bottom:0">' + (c.owed > 0 ? '<button class="btn kiosk" data-act="shareFor" data-type="Customer" data-key="' + esc(c.key) + '">Send reminder</button>' : '') +
+        '<button class="btn" data-act="setLimit" data-key="' + esc(c.key) + '">Set credit limit</button></div></div>';
+    }).join('') : '<p class="hint">No customer has money to pay. Well done.</p>';
+    if (rk.agents.length) {
+      h += '<div class="section-title">Agents with money to pay you</div>' + rk.agents.map(function (a) {
+        return '<div class="card"><div style="display:flex;justify-content:space-between;gap:10px"><b>' + esc(a.name) + '</b>' + pill(a.level + ' risk', RISK_PILL[a.level]) + '</div>' +
+          kv('To collect', money(a.net)) + (a.reasons.length ? '<ul class="reasons">' + a.reasons.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '') + '</div>';
+      }).join('');
+    }
+    h += '<div class="card help"><h3 style="margin-top:0">How the risk score works</h3><p>Points are added for: money unpaid for a long time, owing much more than their usual purchase, paying late before, and past write-offs. 60 points or more is High risk, 30 or more is Medium.</p>' +
+      '<p>Suggested credit: Low risk regular customers up to two of their usual purchases; other Low risk customers one; Medium risk one; High risk none. Tap "Set credit limit" to choose your own.</p></div>';
+    return h;
+  };
+
+  /* ================= Several sales at once ================= */
+  function channelOptions(first) {
+    return '<option value="">' + first + '</option>' + S.settings.channels.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('');
+  }
+  function batchRow(i) {
+    return '<div class="batch-row"><div class="batch-head"><b>Sale ' + (i + 1) + '</b><button type="button" class="linkbtn" data-act="batchRemove">Remove</button></div>' +
+      '<div class="field"><label>Date</label><input type="date" class="b-date" aria-label="Date" value="' + esc(UI.batchDate || '') + '"></div>' +
+      '<div class="field"><label>Customer phone</label><input type="tel" inputmode="tel" class="b-phone" aria-label="Customer phone" list="custPhones" autocomplete="off"><div class="netline"></div></div>' +
+      '<div class="field"><label>Customer name</label><input type="text" class="b-name" aria-label="Customer name" list="custNames" autocomplete="off"></div>' +
+      '<div class="field"><label>Bundle, deposit or details</label><input type="text" class="b-details" aria-label="Details"></div>' +
+      '<div class="two"><div class="field"><label>Amount</label><input type="number" step="any" inputmode="decimal" class="b-amount" aria-label="Amount"></div>' +
+      '<div class="field"><label>Paid through</label><select class="b-channel" aria-label="Paid through">' + channelOptions('Same as above') + '</select></div></div>' +
+      '<label class="check"><input type="checkbox" class="b-paid" checked><span>Paid in full now</span></label>' +
+      '<div class="field b-recv-wrap hide" style="margin-top:10px"><label>Amount received so far</label><input type="number" step="any" inputmode="decimal" class="b-received" aria-label="Amount received"></div></div>';
+  }
+  function openBatch() {
+    UI.batchDate = ''; UI.batchKind = 'DS';
+    var top = '<div id="batch-top">' + seg('batchKind', 'DS', [['DS', 'Data / deposit'], ['WE', 'Wallet exchange']]) +
+      fieldHTML({ k: 'bdate', t: 'pickdate', label: 'Date for these sales' }, {}) +
+      '<div class="field"><label for="b-chan">Paid through, for all rows</label><select id="b-chan">' +
+      S.settings.channels.map(function (c) { return '<option' + (c === (S.meta.lastChannel || S.settings.channels[0]) ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></div>' +
+      '<div class="field hide" id="b-ex-wrap"><label for="b-ex">Exchange type, for all rows</label><select id="b-ex">' + opts('exTypes').map(function (x) { return '<option>' + esc(x) + '</option>'; }).join('') + '</select></div></div>';
+    var body = '<p class="hint" style="margin-top:0">Type several sales, then save them all at once. The date you choose goes on every row; you can still change any row\'s date.</p>' +
+      '<div id="form-error"></div>' + top + '<div id="batch-rows">' + batchRow(0) + batchRow(1) + batchRow(2) + '</div>' +
+      '<button class="btn block" data-act="batchAdd">Add another row</button>' + datalists();
+    var foot = '<button class="btn primary" data-act="batchSave">Save all</button>';
+    if (UI.sheetOpen) {
+      var sh = document.querySelector('#sheetwrap .sheet');
+      sh.querySelector('header h2').textContent = 'Several sales at once';
+      sh.querySelector('.body').innerHTML = body; sh.querySelector('footer').innerHTML = foot; sh.querySelector('.body').scrollTop = 0;
+      FORM = null;
+    } else openSheet('Several sales at once', body, foot);
+  }
+  function batchDateChanged(v) {
+    UI.batchDate = v;
+    Array.prototype.forEach.call(document.querySelectorAll('#batch-rows .b-date'), function (inp) { if (!inp.dataset.touched) inp.value = v; });
+  }
+  function renumberBatch() {
+    Array.prototype.forEach.call(document.querySelectorAll('#batch-rows .batch-head b'), function (b, i) { b.textContent = 'Sale ' + (i + 1); });
+  }
+  function batchSave() {
+    var rows = document.querySelectorAll('#batch-rows .batch-row'), errs = [], out = [];
+    var chan = document.getElementById('b-chan').value, ex = document.getElementById('b-ex').value, kind = UI.batchKind || 'DS';
+    Array.prototype.forEach.call(rows, function (row, i) {
+      var g = function (cls) { var el = row.querySelector('.' + cls); return el ? (el.type === 'checkbox' ? el.checked : el.value.trim()) : ''; };
+      var phone = g('b-phone'), name = g('b-name'), amount = g('b-amount');
+      if (!phone && !name && !amount && !g('b-details')) return;
+      var date = g('b-date'), miss = [];
+      if (!date) miss.push('date'); if (!name) miss.push('name'); if (amount === '' || !(Number(amount) >= 0)) miss.push('amount');
+      if (miss.length) { errs.push('Sale ' + (i + 1) + ': add the ' + miss.join(', ')); return; }
+      var paid = g('b-paid'), rec = g('b-received');
+      var r = { kind: kind, date: date, phone: phone ? (C.gmNormalize(phone) || phone) : '', name: name, details: g('b-details'),
+        billed: Number(amount), received: paid ? Number(amount) : (rec === '' ? '' : Number(rec)), channel: g('b-channel') || chan };
+      if (kind === 'WE') r.exType = ex;
+      out.push(r);
+    });
+    var box = document.getElementById('form-error');
+    if (errs.length) { box.innerHTML = '<div class="form-error">' + errs.map(esc).join('<br>') + '</div>'; document.querySelector('.sheet .body').scrollTop = 0; return; }
+    if (!out.length) { box.innerHTML = '<div class="form-error">Type at least one sale.</div>'; return; }
+    out.forEach(function (r) { r.id = uid(); r.seq = S.nextSeq++; S.sales.push(r); });
+    S.meta.lastChannel = chan;
+    persist().then(function () { toast('Saved ' + out.length + (out.length === 1 ? ' sale' : ' sales')); });
+    closeSheet(); render();
+  }
+
   /* ================= Forms ================= */
   function opts(src) { return typeof src === 'string' ? (S.settings[src] || []) : src; }
   var SCHEMAS = {
     sale: { title: ['New sale', 'Edit sale'], coll: 'sales', fields: [
       { k: 'kind', t: 'seg', opts: [['DS', 'Data / deposit'], ['WE', 'Wallet exchange']] },
-      { k: 'date', t: 'date', label: 'Date', req: 1 },
+      { k: 'date', t: 'pickdate', label: 'Date of this sale', req: 1 },
       { k: 'phone', t: 'tel', label: 'Customer WhatsApp / phone', list: 'custPhones' },
       { k: 'name', t: 'text', label: 'Customer name', req: 1, list: 'custNames' },
-      { k: 'beneficiary', t: 'tel', label: 'Number that received it, if different' },
       { k: 'exType', t: 'select', label: 'Exchange type', opts: 'exTypes', show: function (v) { return v.kind === 'WE'; } },
       { k: 'details', t: 'text', label: 'Bundle, deposit or details' },
-      { k: 'billed', t: 'num', label: 'Amount billed', req: 1, half: 1 },
-      { k: 'received', t: 'num', label: 'Amount received', half: 1 },
-      { k: 'tip', t: 'num', label: 'Tip received', half: 1 },
+      { k: 'billed', t: 'num', label: 'Amount', req: 1, half: 1 },
+      { k: 'channel', t: 'select', label: 'Paid through', opts: 'channels', half: 1 },
+      { k: 'paidFull', t: 'check', label: 'Paid in full now' },
+      { k: 'received', t: 'num', label: 'Amount received so far', show: function (v) { return !v.paidFull; }, note: 'Leave empty if they paid nothing yet.' },
+      { k: 'bank', t: 'text', label: 'Bank name', show: function (v) { return v.channel === 'Bank Transfer'; } },
+      { k: 'beneficiary', t: 'tel', label: 'Number that received it, if different', more: 1 },
+      { k: 'tip', t: 'num', label: 'Tip received', more: 1, half: 1 },
+      { k: 'ref', t: 'text', label: 'Reference / transaction ID', more: 1, half: 1 },
+      { k: 'datePaid', t: 'date', label: 'Date paid, only if paid later', note: 'Saves how many days late they paid.', more: 1 },
+      { k: 'writtenOff', t: 'num', label: 'Write off as bad debt (D)', note: 'Only if you will never collect it.', more: 1 },
+      { k: 'woReason', t: 'select', label: 'Reason for write-off', opts: 'woReasons', show: function (v) { return num(v.writtenOff) > 0; }, more: 1 },
+      { k: 'notes', t: 'area', label: 'Notes', more: 1 }],
+      defaults: function () { return { kind: 'DS', date: '', channel: S.meta.lastChannel || S.settings.channels[0] || '', paidFull: true }; },
+      keep: ['kind', 'date', 'channel'],
+      info: saleInfo },
+    payment: { title: ['Customer paid', 'Edit payment'], coll: 'sales', fields: [
+      { k: 'date', t: 'pickdate', label: 'Date they paid', req: 1 },
+      { k: 'phone', t: 'tel', label: 'Customer WhatsApp / phone', list: 'custPhones' },
+      { k: 'name', t: 'text', label: 'Customer name', req: 1, list: 'custNames' },
+      { k: 'received', t: 'num', label: 'Amount paid', req: 1, half: 1 },
       { k: 'channel', t: 'select', label: 'Paid through', opts: 'channels', half: 1 },
       { k: 'bank', t: 'text', label: 'Bank name', show: function (v) { return v.channel === 'Bank Transfer'; } },
-      { k: 'ref', t: 'text', label: 'Reference or transaction ID (optional)' },
-      { k: 'datePaid', t: 'date', label: 'Date paid, only if paid later', note: 'Saves how many days late they paid.' },
-      { k: 'writtenOff', t: 'num', label: 'Write off as bad debt (D)', note: 'Only if you will never collect it.' },
-      { k: 'woReason', t: 'select', label: 'Reason for write-off', opts: 'woReasons', show: function (v) { return num(v.writtenOff) > 0; } },
-      { k: 'notes', t: 'area', label: 'Notes' }],
-      defaults: function () { return { kind: 'DS', date: R.today, channel: S.settings.channels[0] || '' }; },
-      info: saleInfo },
+      { k: 'ref', t: 'text', label: 'Reference / transaction ID', more: 1 },
+      { k: 'notes', t: 'area', label: 'Notes', more: 1 }],
+      defaults: function () { return { date: '', channel: S.meta.lastChannel || S.settings.channels[0] || '' }; },
+      keep: ['date', 'channel'],
+      info: paymentInfo },
     agent: { title: ['New agent entry', 'Edit agent entry'], coll: 'agents', fields: [
-      { k: 'date', t: 'date', label: 'Date', req: 1 },
+      { k: 'date', t: 'pickdate', label: 'Date of this entry', req: 1 },
       { k: 'name', t: 'text', label: 'Agent name', req: 1, list: 'agentNames', note: 'Use the same name every time, even if they use another number.' },
-      { k: 'phone', t: 'tel', label: 'Agent WhatsApp / phone', half: 1 },
-      { k: 'type', t: 'select', label: 'Agent type', opts: ['Regular Agent', 'Master Agent'], half: 1 },
       { k: 'txType', t: 'select', label: 'Transaction type', opts: 'agentTxTypes' },
-      { k: 'txNumber', t: 'tel', label: 'Number used for this entry' },
       { k: 'desc', t: 'text', label: 'Description', note: 'For example: ComCash float, Xpress deposit, GT Bank to Wave.' },
-      { k: 'toAgent', t: 'num', label: 'Sent / paid to agent', half: 1 },
-      { k: 'fromAgent', t: 'num', label: 'Received from agent', half: 1 },
-      { k: 'writtenOff', t: 'num', label: 'Write off as bad debt (D)' },
-      { k: 'woReason', t: 'select', label: 'Reason for write-off', opts: 'woReasons', show: function (v) { return num(v.writtenOff) > 0; } },
-      { k: 'notes', t: 'area', label: 'Notes' }],
-      defaults: function () { return { date: R.today, type: 'Regular Agent' }; },
+      { k: 'toAgent', t: 'num', label: 'You gave the agent', half: 1 },
+      { k: 'fromAgent', t: 'num', label: 'The agent gave you', half: 1 },
+      { k: 'phone', t: 'tel', label: 'Agent WhatsApp / phone', half: 1, more: 1 },
+      { k: 'type', t: 'select', label: 'Agent type', opts: ['Regular Agent', 'Master Agent'], half: 1, more: 1 },
+      { k: 'txNumber', t: 'tel', label: 'Number that received it', note: 'The phone number that received the float, credit or service.', more: 1 },
+      { k: 'writtenOff', t: 'num', label: 'Write off as bad debt (D)', more: 1 },
+      { k: 'woReason', t: 'select', label: 'Reason for write-off', opts: 'woReasons', show: function (v) { return num(v.writtenOff) > 0; }, more: 1 },
+      { k: 'notes', t: 'area', label: 'Notes', more: 1 }],
+      defaults: function () { return { date: '', type: 'Regular Agent' }; },
+      keep: ['date'],
       info: agentInfo },
     referral: { title: ['New referral sale', 'Edit referral sale'], coll: 'referrals', fields: [
-      { k: 'date', t: 'date', label: 'Date', req: 1 },
+      { k: 'date', t: 'pickdate', label: 'Date of this sale', req: 1 },
       { k: 'agent', t: 'text', label: 'Referring agent', req: 1, list: 'refAgents' },
-      { k: 'agentPhone', t: 'tel', label: 'Agent WhatsApp / phone' },
       { k: 'service', t: 'select', label: 'Service', opts: ['Data Sending', 'Deposit', 'EVC'], req: 1 },
       { k: 'amount', t: 'num', label: 'Amount (or the day\'s total)', req: 1 },
       { k: 'rate', t: 'num', label: 'Commission rate (%)', show: function (v) { return v.service !== 'Deposit'; }, half: 1 },
       { k: 'share', t: 'num', label: 'Agent\'s share (%)', half: 1 },
-      { k: 'client', t: 'text', label: 'Client name (optional)', half: 1 },
-      { k: 'clientPhone', t: 'tel', label: 'Client phone (optional)', half: 1 },
-      { k: 'notes', t: 'area', label: 'Notes' }],
-      defaults: function () { return { date: R.today, service: 'Data Sending', share: 50 }; },
+      { k: 'agentPhone', t: 'tel', label: 'Agent WhatsApp / phone', more: 1 },
+      { k: 'client', t: 'text', label: 'Client name', half: 1, more: 1 },
+      { k: 'clientPhone', t: 'tel', label: 'Client phone', half: 1, more: 1 },
+      { k: 'notes', t: 'area', label: 'Notes', more: 1 }],
+      defaults: function () { return { date: '', service: 'Data Sending', share: 50 }; },
+      keep: ['date', 'agent', 'agentPhone', 'service', 'rate', 'share'],
       info: refInfo },
     wallet: { title: ['New wallet commission', 'Edit wallet commission'], coll: 'walletComm', fields: [
       { k: 'month', t: 'month', label: 'Month', req: 1, half: 1 },
       { k: 'wallet', t: 'select', label: 'Wallet', opts: 'wallets', req: 1, half: 1 },
       { k: 'earned', t: 'num', label: 'Commission on statement', half: 1 },
       { k: 'received', t: 'num', label: 'Commission paid to you', half: 1 },
-      { k: 'shared', t: 'num', label: 'Shared with an agent', half: 1 },
-      { k: 'agentName', t: 'text', label: 'Which agent', list: 'agentNames', half: 1 },
-      { k: 'notes', t: 'area', label: 'Notes' }],
+      { k: 'shared', t: 'num', label: 'Shared with an agent', half: 1, more: 1 },
+      { k: 'agentName', t: 'text', label: 'Which agent', list: 'agentNames', half: 1, more: 1 },
+      { k: 'notes', t: 'area', label: 'Notes', more: 1 }],
       defaults: function () { return { month: R.today.slice(0, 7) }; },
       info: function (v) { return calcBox([['Net commission', money(num(v.received) - num(v.shared))]]); } },
     evc: { title: ['New EVC entry', 'Edit EVC entry'], coll: 'evc', fields: [
@@ -856,11 +1052,11 @@
       { k: 'provider', t: 'select', label: 'Provider', opts: 'evcProviders', req: 1, half: 1 },
       { k: 'purchase', t: 'num', label: 'Purchase amount', req: 1, half: 1 },
       { k: 'wholesale', t: 'num', label: 'Part sold wholesale', half: 1, note: 'To fellow EVC dealers.' },
-      { k: 'rate', t: 'num', label: 'Return rate (%)', half: 1 },
-      { k: 'retailRoy', t: 'num', label: 'Retail royalty (%)', half: 1 },
-      { k: 'wholesaleRoy', t: 'num', label: 'Wholesale royalty (%)', half: 1 },
-      { k: 'wholesaler', t: 'text', label: 'Wholesaler name', half: 1 },
-      { k: 'notes', t: 'area', label: 'Notes' }],
+      { k: 'wholesaler', t: 'text', label: 'Wholesaler name', show: function (v) { return num(v.wholesale) > 0; } },
+      { k: 'rate', t: 'num', label: 'Return rate (%)', half: 1, more: 1 },
+      { k: 'retailRoy', t: 'num', label: 'Retail royalty (%)', half: 1, more: 1 },
+      { k: 'wholesaleRoy', t: 'num', label: 'Wholesale royalty (%)', more: 1 },
+      { k: 'notes', t: 'area', label: 'Notes', more: 1 }],
       defaults: function () { return { month: R.today.slice(0, 7), rate: 7, retailRoy: 2, wholesaleRoy: 1, provider: S.settings.evcProviders[0] || '' }; },
       info: function (v) {
         var x = C.computeEvc([v])[0];
@@ -870,14 +1066,14 @@
       { k: 'date', t: 'date', label: 'Date found', req: 1, half: 1 },
       { k: 'status', t: 'select', label: 'Status', opts: ['Open', 'In Progress', 'Fixed'], half: 1 },
       { k: 'type', t: 'select', label: 'Type of error', opts: 'errorTypes' },
-      { k: 'ref', t: 'text', label: 'Customer, agent or ref ID' },
       { k: 'desc', t: 'area', label: 'What happened' },
-      { k: 'causedBy', t: 'select', label: 'Caused by', opts: 'causedBy', half: 1 },
-      { k: 'foundBy', t: 'text', label: 'Found by', half: 1 },
       { k: 'ledToLoss', t: 'select', label: 'Did it cost money?', opts: ['No', 'Yes'], half: 1 },
       { k: 'amountLost', t: 'num', label: 'Amount lost', half: 1, show: function (v) { return v.ledToLoss === 'Yes'; } },
-      { k: 'correction', t: 'area', label: 'How it was fixed' },
-      { k: 'dateFixed', t: 'date', label: 'Date fixed' }],
+      { k: 'ref', t: 'text', label: 'Customer, agent or ref ID', more: 1 },
+      { k: 'causedBy', t: 'select', label: 'Caused by', opts: 'causedBy', half: 1, more: 1 },
+      { k: 'foundBy', t: 'text', label: 'Found by', half: 1, more: 1 },
+      { k: 'correction', t: 'area', label: 'How it was fixed', more: 1 },
+      { k: 'dateFixed', t: 'date', label: 'Date fixed', more: 1 }],
       defaults: function () { return { date: R.today, status: 'Open', ledToLoss: 'No' }; } },
     daily: { title: ['Cash check', 'Cash check'], fields: [
       { k: 'openCash', t: 'num', label: 'Opening cash', half: 1 },
@@ -907,23 +1103,36 @@
   function saleInfo(v) {
     var h = '';
     if (C.has(v.billed)) {
-      var sf = r2(num(v.billed) - num(v.received) - num(v.writtenOff));
+      var sf = r2(num(v.billed) - (v.paidFull ? num(v.billed) : num(v.received)) - num(v.writtenOff));
       h += calcBox([['This sale', sf > 0 ? money(sf) + ' unpaid' : sf < 0 ? 'Overpaid by ' + money(-sf) : 'Fully paid']]);
     }
     if (v.phone || v.name) {
       var c = findCustomer(C.custKey(v));
       if (c && FORM && FORM.isNew) {
-        h += '<div class="form-info">' + esc(c.name || 'Known customer') + ' ' + (c.balance > 0 ? 'already owes you ' + money(c.balance) + '.' : c.credit > 0 ? 'has ' + money(c.credit) + ' credit with you. It is used on this sale automatically.' : 'is fully settled.') +
+        h += '<div class="form-info">' + esc(c.name || 'Known customer') + ' ' + (c.balance > 0 ? 'still has ' + money(c.balance) + ' to pay.' : c.credit > 0 ? 'paid ' + money(c.credit) + ' in advance. It is used on this sale automatically.' : 'has nothing to pay.') +
           ' ' + esc(c.type) + ' customer.</div>';
+        h += creditWarning(c, sf);
       }
     }
     return h;
   }
+  function paymentInfo(v) {
+    if (!(v.phone || v.name)) return '';
+    var c = findCustomer(C.custKey(v));
+    if (!c) return '<div class="form-info">New customer: this payment is recorded as credit they can use later.</div>';
+    var after = r2(c.balance - num(v.received));
+    return calcBox([['Still to pay now', c.balance > 0 ? money(c.balance) : c.balance < 0 ? 'Nothing (credit ' + money(-c.balance) + ')' : 'Nothing'],
+      ['After this payment', after > 0 ? 'Still to pay ' + money(after) : after < 0 ? 'Credit ' + money(-after) : 'Settled']]);
+  }
   function agentInfo(v) {
     var n = r2(num(v.toAgent) - num(v.fromAgent) - num(v.writtenOff)), h = '';
-    if (C.has(v.toAgent) || C.has(v.fromAgent)) h += calcBox([['This entry', n > 0 ? 'Agent owes you ' + money(n) : n < 0 ? 'You owe agent ' + money(-n) : 'Even']]);
+    if (C.has(v.toAgent) || C.has(v.fromAgent)) h += calcBox([['This entry', n > 0 ? 'To collect ' + money(n) : n < 0 ? 'To pay ' + money(-n) : 'Even']]);
     var a = v.name ? findAgent(C.agentKey(v.name)) : null;
-    if (a && FORM && FORM.isNew) h += '<div class="form-info">Before this entry: ' + (a.net > 0 ? a.name + ' owes you ' + money(a.net) : a.net < 0 ? 'you owe ' + a.name + ' ' + money(-a.net) : a.name + ' is settled') + '.</div>';
+    if (a && FORM && FORM.isNew) {
+      var after = r2(a.net + n);
+      h += '<div class="form-info">' + esc(a.name) + ' now: ' + (a.net > 0 ? 'to collect ' + money(a.net) : a.net < 0 ? 'to pay ' + money(-a.net) : 'settled') +
+        '. After this entry: ' + (after > 0 ? 'to collect ' + money(after) : after < 0 ? 'to pay ' + money(-after) : 'settled') + '.</div>';
+    }
     return h;
   }
   function refInfo(v) {
@@ -951,6 +1160,17 @@
         return '<button type="button" data-act="formSeg" data-k="' + f.k + '" data-v="' + esc(o[0]) + '" class="' + (v === o[0] ? 'on' : '') + '">' + esc(o[1]) + '</button>';
       }).join('') + '</div><input type="hidden" name="' + f.k + '" value="' + esc(v) + '"></div>';
     }
+    if (f.t === 'pickdate') {
+      var yd = addDays(R.today, -1), which = !v ? '' : v === R.today ? 'today' : v === yd ? 'yesterday' : 'other';
+      var chip = function (w, t1, t2) { return '<button type="button" class="dchip' + (which === w ? ' on' : '') + '" data-act="pickDate" data-v="' + w + '"><b>' + t1 + '</b><small>' + t2 + '</small></button>'; };
+      return '<div class="field datefield" data-field="' + f.k + '"><label for="' + id + '">' + esc(f.label) + ' *</label><div class="datechips">' +
+        chip('today', 'Today', dayShort(R.today)) + chip('yesterday', 'Yesterday', dayShort(yd)) + chip('other', 'Other date', which === 'other' ? dayShort(v) : 'Pick') +
+        '</div><input id="' + id + '" name="' + f.k + '" type="date" value="' + esc(v) + '" class="' + (which === 'other' ? '' : 'hide-date') + '">' +
+        (which ? '' : '<div class="note datenote">Tap the date of this transaction.</div>') + '</div>';
+    }
+    if (f.t === 'check') {
+      return '<div class="field' + hide + '" data-field="' + f.k + '"><label class="check"><input type="checkbox" name="' + f.k + '"' + (v ? ' checked' : '') + '><span>' + esc(f.label) + '</span></label></div>';
+    }
     if (f.t === 'select') {
       var o = opts(f.opts).slice(); if (v && o.indexOf(v) < 0) o.unshift(v);
       inp = '<select id="' + id + '" name="' + f.k + '"><option value="">Choose</option>' + o.map(function (x) { return '<option' + (x === v ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('') + '</select>';
@@ -960,11 +1180,12 @@
       inp = '<input id="' + id + '" name="' + f.k + '" type="number" step="any" inputmode="decimal" value="' + esc(v) + '">';
     } else {
       var type = f.t === 'tel' ? 'tel' : f.t === 'date' ? 'date' : f.t === 'month' ? 'month' : 'text';
-      inp = '<input id="' + id + '" name="' + f.k + '" type="' + type + '"' + list + ' value="' + esc(v) + '" autocomplete="off">';
+      inp = '<input id="' + id + '" name="' + f.k + '" type="' + type + '"' + list + ' value="' + esc(v) + '" autocomplete="off"' + (f.t === 'tel' ? ' inputmode="tel"' : '') + '>';
+      if (f.t === 'tel') inp += '<div class="netline">' + netLine(v) + '</div>';
     }
     return '<div class="field' + hide + '" data-field="' + f.k + '">' + lab + inp + (f.note ? '<div class="note">' + esc(f.note) + '</div>' : '') + '</div>';
   }
-  function formBody(fields, vals) {
+  function fieldsHTML(fields, vals) {
     var h = '', i = 0;
     while (i < fields.length) {
       var f = fields[i];
@@ -973,17 +1194,30 @@
     }
     return h;
   }
+  function formBody(fields, vals, openMore) {
+    var main = fields.filter(function (f) { return !f.more; }), extra = fields.filter(function (f) { return f.more; });
+    var h = fieldsHTML(main, vals);
+    if (extra.length) h += '<details class="more-fields"' + (openMore ? ' open' : '') + '><summary>More details</summary><div class="inner">' + fieldsHTML(extra, vals) + '</div></details>';
+    return h;
+  }
+  function hasMoreValues(fields, vals) {
+    return fields.some(function (f) { var v = vals[f.k]; return f.more && v !== '' && v != null && v !== 0; });
+  }
   function openForm(type, rec, extra) {
     var sc = SCHEMAS[type], isNew = !rec;
     var vals = Object.assign({}, isNew && sc.defaults ? sc.defaults() : {}, rec || {}, (extra && extra.prefill) || {});
+    if (type === 'sale' && !isNew) vals.paidFull = C.has(rec.billed) && num(rec.billed) > 0 && num(rec.received) === num(rec.billed);
     var title = (extra && extra.title) || sc.title[isNew ? 0 : 1];
-    var body = '<div id="form-error"></div>' + formBody(sc.fields, vals) + '<div id="form-info"></div>' + datalists();
+    var body = (type === 'sale' && isNew ? '<button type="button" class="btn block" data-act="openBatch" style="margin-bottom:12px">Several sales? Record them all at once</button>' : '') +
+      '<div id="form-error"></div>' + formBody(sc.fields, vals, !isNew && hasMoreValues(sc.fields, vals)) + '<div id="form-info"></div>' + datalists();
     if (type === 'sale' && !isNew) {
       var cs = R.sales.filter(function (x) { return x.id === rec.id; })[0];
-      if (cs && cs.shortfall > 0) body += '<button class="btn kiosk block" data-act="recordPayment" style="margin-bottom:10px">Record a payment on this sale</button>';
+      if (cs && cs.remaining > 0) body += '<button class="btn kiosk block" data-act="recordPayment" style="margin-bottom:10px">Record a payment on this sale</button>';
       if (cs) body += '<p class="hint">Ref ID ' + esc(cs.refId) + '. Account after this sale: ' + (cs.balance > 0 ? 'owes ' + money(cs.balance) : cs.balance < 0 ? 'credit ' + money(-cs.balance) : 'settled') + '.</p>';
     }
-    var foot = (!isNew && sc.coll ? '<button class="btn danger" data-act="deleteRec">Delete</button>' : '') + '<button class="btn primary" data-act="saveForm">Save</button>';
+    var foot = (!isNew && sc.coll ? '<button class="btn danger" data-act="deleteRec">Delete</button>' : '') +
+      (isNew && sc.keep ? '<button class="btn" data-act="saveAnother">Save, add another</button>' : '') +
+      '<button class="btn primary" data-act="saveForm">Save</button>';
     openSheet(title, body, foot);
     FORM = Object.assign({ type: type, schema: sc, rec: rec, isNew: isNew }, extra || {});
     refreshForm();
@@ -992,6 +1226,7 @@
     var vals = {}, el = document.getElementById('sheetwrap');
     FORM.schema.fields.forEach(function (f) {
       var inp = el.querySelector('[name="' + f.k + '"]'); if (!inp) return;
+      if (f.t === 'check') { vals[f.k] = !!inp.checked; return; }
       var x = inp.value;
       vals[f.k] = f.t === 'num' ? (String(x).trim() === '' ? '' : Number(x)) : String(x).trim();
     });
@@ -1006,6 +1241,9 @@
     });
     var info = el.querySelector('#form-info');
     if (info && FORM.schema.info) info.innerHTML = FORM.schema.info(vals);
+    var hasPick = FORM.schema.fields.some(function (f) { return f.t === 'pickdate'; });
+    var sb = el.querySelector('[data-act=saveForm]');
+    if (sb && hasPick) sb.textContent = vals.date ? 'Save for ' + dayShort(vals.date) : 'Save';
   }
   function openSheet(title, body, foot) {
     removeSheet();
@@ -1024,18 +1262,38 @@
   function closeSheet() { if (UI.sheetOpen) history.back(); }
   function findRec(coll, id) { var a = S[coll]; for (var i = 0; i < a.length; i++) if (a[i].id === id) return a[i]; return null; }
 
-  function saveForm() {
+  function refillForm(type, prefill) {
+    var sc = SCHEMAS[type], vals = Object.assign({}, sc.defaults ? sc.defaults() : {}, prefill || {});
+    var el = document.querySelector('#sheetwrap .body');
+    el.innerHTML = '<div id="form-error"></div>' + formBody(sc.fields, vals, false) + '<div id="form-info"></div>' + datalists();
+    FORM = { type: type, schema: sc, rec: null, isNew: true };
+    refreshForm(); el.scrollTop = 0;
+  }
+  function saveForm(addAnother) {
     var F = FORM, vals = collect(), missing = [];
     F.schema.fields.forEach(function (f) {
       if (f.req && (vals[f.k] === '' || vals[f.k] == null) && !(f.show && !f.show(vals))) missing.push(f.label);
     });
     if (missing.length) { document.getElementById('form-error').innerHTML = '<div class="form-error">Fill in: ' + esc(missing.join(', ')) + '.</div>'; document.querySelector('.sheet .body').scrollTop = 0; return; }
     F.schema.fields.forEach(function (f) { if (f.show && !f.show(vals)) vals[f.k] = ''; });
+    F.schema.fields.forEach(function (f) { if (f.t === 'tel' && vals[f.k]) vals[f.k] = C.gmNormalize(vals[f.k]) || vals[f.k]; });
+    if (F.type === 'payment' && !(num(vals.received) > 0)) {
+      document.getElementById('form-error').innerHTML = '<div class="form-error">Type the amount they paid.</div>'; return;
+    }
+    var kept = {};
+    (F.schema.keep || []).forEach(function (k) { kept[k] = vals[k]; });
+    if (F.type === 'sale') { if (vals.paidFull) vals.received = vals.billed; delete vals.paidFull; }
+    if (F.type === 'payment') { vals.kind = 'DS'; vals.billed = 0; if (F.isNew) vals.details = 'Payment received'; }
+    if (vals.channel) S.meta.lastChannel = vals.channel;
     if (F.type === 'daily') { S.daily[F.date] = vals; }
     else if (F.type === 'recon') { S.recon[F.month] = vals; }
     else if (F.type === 'capital') { saveCapital(vals); }
     else if (F.isNew) { vals.id = uid(); vals.seq = S.nextSeq++; S[F.schema.coll].push(vals); }
     else { Object.assign(F.rec, vals); }
+    if (addAnother && F.isNew && F.schema.keep) {
+      persist(); render(); refillForm(F.type, kept); toast('Saved. Add the next one.');
+      return;
+    }
     persist().then(function () { toast('Saved'); });
     closeSheet(); render();
   }
@@ -1078,8 +1336,50 @@
     openCustomer: function (d) { go({ v: 'customer', key: d.key }); },
     openAgent: function (d) { go({ v: 'agent', key: d.key }); },
     newSale: function () { openForm('sale', null); },
+    newPayment: function () { openForm('payment', null); },
+    newPaymentFor: function (d) { var c = findCustomer(d.key); openForm('payment', null, { prefill: c ? { name: c.name, phone: c.phone, received: c.owed || '' } : {} }); },
+    saveAnother: function () { saveForm(true); },
+    pickDate: function (d, el) {
+      var field = el.closest('.field'), inp = field.querySelector('input[type=date]');
+      Array.prototype.forEach.call(field.querySelectorAll('.dchip'), function (b) { b.classList.toggle('on', b === el); });
+      var note = field.querySelector('.datenote'); if (note) note.remove();
+      var fe = document.getElementById('form-error'); if (fe && /Date/.test(fe.textContent)) fe.innerHTML = '';
+      if (d.v === 'today') { inp.value = R.today; inp.classList.add('hide-date'); }
+      else if (d.v === 'yesterday') { inp.value = addDays(R.today, -1); inp.classList.add('hide-date'); }
+      else { inp.classList.remove('hide-date'); inp.focus(); try { if (inp.showPicker) inp.showPicker(); } catch (e) {} }
+      if (field.closest('#batch-top')) batchDateChanged(inp.value);
+      refreshForm();
+    },
+    setNet: function (d, el) {
+      var inp = el.closest('.field').querySelector('input'), core = C.gmCore(inp.value);
+      inp.value = d.v ? d.v + core : core; updateNet(inp);
+      if (FORM) { autofill(inp); refreshForm(); }
+    },
+    setLimit: function (d) {
+      var rk = riskFor(d.key); if (!rk) return;
+      var ans = prompt('Credit limit for ' + (rk.name || 'this customer') + ', in dalasi. Type 0 for no credit.\nSuggested: ' + money(rk.suggested) + '. Leave it empty to use the suggestion.', rk.manual !== null ? String(rk.manual) : '');
+      if (ans === null) return;
+      if (String(ans).trim() === '') delete S.limits[d.key];
+      else { var v = parseFloat(String(ans).replace(/,/g, '')); if (!(v >= 0)) { toast('Type a number, for example 500.'); return; } S.limits[d.key] = v; }
+      persist().then(function () { toast('Credit limit saved'); }); render();
+    },
+    openBatch: function () { openBatch(); },
+    batchKind: function (d, el) {
+      UI.batchKind = d.v; Array.prototype.forEach.call(el.parentNode.children, function (b) { b.classList.toggle('on', b === el); });
+      document.getElementById('b-ex-wrap').classList.toggle('hide', d.v !== 'WE');
+    },
+    batchAdd: function () {
+      var box = document.getElementById('batch-rows'), n = box.querySelectorAll('.batch-row').length;
+      box.insertAdjacentHTML('beforeend', batchRow(n));
+      var last = box.lastElementChild; last.scrollIntoView({ block: 'start' }); last.querySelector('.b-phone').focus();
+    },
+    batchRemove: function (d, el) { el.closest('.batch-row').remove(); renumberBatch(); },
+    batchSave: function () { batchSave(); },
     newSaleFor: function (d) { var c = findCustomer(d.key); openForm('sale', null, { prefill: c ? { name: c.name, phone: c.phone } : {} }); },
-    editSale: function (d) { var r = findRec('sales', d.id); if (r) openForm('sale', r); },
+    editSale: function (d) {
+      var r = findRec('sales', d.id); if (!r) return;
+      openForm(C.has(r.billed) && num(r.billed) === 0 && r.details === 'Payment received' ? 'payment' : 'sale', r);
+    },
     newAgent: function () { openForm('agent', null); },
     newAgentFor: function (d) { var a = findAgent(d.key); openForm('agent', null, { prefill: a ? { name: a.name, phone: a.phone, type: a.type || 'Regular Agent' } : {} }); },
     editAgent: function (d) { var r = findRec('agents', d.id); if (r) openForm('agent', r); },
@@ -1096,7 +1396,7 @@
     editDaily: function (d) { openForm('daily', S.daily[d.date] || null, { date: d.date, title: 'Cash check, ' + shortDate(d.date), prefill: S.daily[d.date] || {} }); },
     editRecon: function (d) { openForm('recon', S.recon[d.month] || null, { month: d.month, title: 'Reconcile ' + monthName(d.month), prefill: S.recon[d.month] || { status: 'Pending' } }); },
     closeSheet: function () { closeSheet(); },
-    saveForm: function () { saveForm(); },
+    saveForm: function () { saveForm(false); },
     deleteRec: function () {
       if (!FORM || !FORM.rec || !FORM.schema.coll) return;
       if (!confirm('Delete this entry? This cannot be undone.')) return;
@@ -1106,7 +1406,7 @@
     recordPayment: function () {
       var rec = FORM && FORM.rec; if (!rec) return;
       var cs = R.sales.filter(function (x) { return x.id === rec.id; })[0];
-      var ans = prompt('How much did they pay now? (D)', cs ? String(cs.shortfall) : '');
+      var ans = prompt('How much did they pay now? (D)', cs ? String(cs.remaining) : '');
       if (ans === null) return;
       var amt = parseFloat(String(ans).replace(/,/g, ''));
       if (!isFinite(amt) || amt <= 0) { toast('Type an amount greater than 0.'); return; }
@@ -1153,7 +1453,7 @@
       var f = backupFile(), file = null;
       try { file = new File([f.blob], f.name, { type: 'application/json' }); } catch (e) { file = null; }
       if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
-        navigator.share({ files: [file], title: 'Business Tracker backup' }).then(markBackedUp).catch(function () {});
+        navigator.share({ files: [file], title: APP_NAME + ' backup' }).then(markBackedUp).catch(function () {});
       } else { download(f.blob, f.name); markBackedUp(); }
     },
     backupDownload: function () { var f = backupFile(); download(f.blob, f.name); markBackedUp(); },
@@ -1218,7 +1518,7 @@
     try { document.execCommand('copy'); toast('Copied'); } catch (e) { toast('Press and hold the message to copy it.'); }
   }
   function backupFile() {
-    var name = 'business-tracker-backup-' + R.today + '.json';
+    var name = 'agent-client-tracker-backup-' + R.today + '.json';
     return { blob: new Blob([JSON.stringify(S)], { type: 'application/json' }), name: name };
   }
   function markBackedUp() { S.meta.lastBackup = R.today; persist(); render(); toast('Backup saved'); }
@@ -1251,18 +1551,35 @@
     if (t.id === 'q-cust') { UI.custQuery = t.value; renderList(); return; }
     if (t.id === 'q-agents') { UI.agentQuery = t.value; UI.limit = 120; renderList(); return; }
     if (t.id === 'msg') { UI.shareText = t.value; return; }
+    if (t.type === 'tel' && t.closest('#sheetwrap')) updateNet(t);
+    if (t.classList.contains('b-phone')) {
+      var row = t.closest('.batch-row'), nm = row.querySelector('.b-name'), cu = findCustomer(C.custKey({ phone: t.value }));
+      if (cu && !nm.value) nm.value = cu.name;
+    }
     if (FORM && t.closest('#sheetwrap')) { autofill(t); refreshForm(); }
   });
   document.addEventListener('change', function (e) {
     var t = e.target;
     if (t.id === 'share-who') { UI.shareKey = t.value; UI.shareText = ''; render(); return; }
     if (t.id === 'importFile') { importFile(t.files && t.files[0]); t.value = ''; return; }
+    if (t.type === 'tel' && t.closest('#sheetwrap') && t.value) {
+      var nv = C.gmNormalize(t.value);
+      if (nv && nv !== t.value.replace(/\D/g, '') && C.gmDigits(t.value).length === 7) toast('Changed to the new 9-digit number');
+      if (nv) t.value = nv; updateNet(t);
+    }
+    if (t.type === 'date' && t.closest('.datefield')) {
+      var f = t.closest('.datefield'), other = f.querySelector('.dchip[data-v=other] small');
+      if (other && t.value) other.textContent = dayShort(t.value);
+      if (f.closest('#batch-top')) batchDateChanged(t.value);
+    }
+    if (t.classList.contains('b-date')) t.dataset.touched = '1';
+    if (t.classList.contains('b-paid')) t.closest('.batch-row').querySelector('.b-recv-wrap').classList.toggle('hide', t.checked);
     if (FORM && t.closest('#sheetwrap')) { autofill(t); refreshForm(); }
   });
   function autofill(t) {
     var sheet = document.getElementById('sheetwrap');
     function set(name, val) { var el = sheet.querySelector('[name="' + name + '"]'); if (el && !el.value && val) el.value = val; }
-    if (FORM.type === 'sale') {
+    if (FORM.type === 'sale' || FORM.type === 'payment') {
       if (t.name === 'phone') { var c = findCustomer(C.custKey({ phone: t.value })); if (c) set('name', c.name); }
       if (t.name === 'name') {
         var nm = t.value.trim().toLowerCase(), hits = R.customers.filter(function (c) { return c.name.toLowerCase() === nm; });
