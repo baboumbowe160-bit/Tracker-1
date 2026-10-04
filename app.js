@@ -8,15 +8,17 @@
   var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-  function money(v) {
-    var n = r2(num(v)), a = Math.abs(n);
-    return (n < 0 ? '−' : '') + 'D' + a.toLocaleString('en-GB', { minimumFractionDigits: a % 1 ? 2 : 0, maximumFractionDigits: 2 });
-  }
+  function money(v) { return C.fm(v); }
+  function sym() { return C.fm(0).replace(/0$/, ''); }
   function compact(v) {
     var n = num(v), a = Math.abs(n);
     var s = a >= 1e6 ? (a / 1e6).toFixed(a >= 1e7 ? 0 : 1) + 'm' : a >= 1e3 ? (a / 1e3).toFixed(a >= 1e4 ? 0 : 1) + 'k' : String(Math.round(a));
-    return (n < 0 ? '−' : '') + 'D' + s;
+    return (n < 0 ? '-' : '') + sym() + s;
   }
+  function pad2(n) { return String(n).padStart(2, '0'); }
+  function nowTime() { var t = new Date(); return pad2(t.getHours()) + ':' + pad2(t.getMinutes()); }
+  function fmtTime(t) { return t || ''; }
+  function stamp(ms) { if (!ms) return ''; var t = new Date(ms); return t.getDate() + ' ' + MONTHS[t.getMonth()].slice(0, 3) + ' ' + t.getFullYear() + ', ' + pad2(t.getHours()) + ':' + pad2(t.getMinutes()); }
   function parts(s) { var p = String(s).split('-').map(Number); return { y: p[0], m: p[1], d: p[2] }; }
   function ord(d) { var j = d % 10, k = d % 100; return d + (k >= 11 && k <= 13 ? 'th' : j === 1 ? 'st' : j === 2 ? 'nd' : j === 3 ? 'rd' : 'th'); }
   function readable(s) { if (!s) return ''; var p = parts(s); return ord(p.d) + ' ' + MONTHS[p.m - 1] + ' ' + p.y; }
@@ -29,27 +31,35 @@
 
   /* ================= Data ================= */
   var DEFAULT_SETTINGS = {
-    countryCode: '220',
-    channels: ['Wave', 'APS', 'Afrimoney', 'QMoney', 'Nafa', 'Yonna', 'ComCash', 'Bank Transfer', 'Cash', 'Other'],
+    profile: { name: '', country: 'GM' },
+    currency: { symbol: 'D', code: 'GMD' },
+    theme: 'classic',
+    tipMode: 'extra',
+    payDefault: '',
+    channels: ['Wave', 'APS', 'Afrimoney', 'QMoney', 'Nafa', 'Yonna', 'ComCach', 'Bank Transfer', 'Cash'],
     exTypes: ['Bank-to-Wallet', 'Wallet-to-Bank', 'Deposit', 'Other'],
     agentTxTypes: ['Float Transfer/Rebalancing (between wallets)', 'EVC/Voucher Transaction', 'Bank to Bank Exchange', 'Bank to Wallet Exchange', 'Wallet to Bank Exchange', 'Other'],
-    wallets: ['Wave', 'APS', 'Afrimoney', 'QMoney', 'Nafa', 'ComCash', 'Yonna Wallet', 'Xpress Point', 'Suturamoney', 'Other'],
-    evcProviders: ['EVC Comium', 'Africell', 'Qcell', 'Other'],
-    capitalAccounts: ['Cash in hand', 'Wave', 'APS', 'Afrimoney', 'QMoney', 'Nafa', 'ComCash', 'Yonna Wallet', 'Xpress Point', 'Suturamoney', 'Bank', 'EVC stock'],
+    wallets: ['Wave', 'APS', 'Afrimoney', 'QMoney', 'Nafa', 'ComCach', 'Yonna Wallet', 'Xpress Point', 'Suturamoney', 'Other'],
+    evcProviders: ['Comium EVC', 'Africell EVC', 'Qcell EVC', 'Gamcel EVC'],
+    capitalAccounts: ['Cash in Hand', 'Wave', 'APS', 'Afrimoney', 'QMoney', 'Nafa', 'ComCach', 'Yonna Wallet', 'Xpress Point', 'Suturamoney', 'Bank', 'EVC Stock'],
+    expenseCats: ['Data / Airtime Purchase', 'Rent', 'Transport', 'Staff', 'Owner Withdrawal', 'Tips Handed Over', 'Bank Charges', 'Other'],
     woReasons: ['Customer unreachable/disappeared', 'Agent defaulted', 'Error-caused loss', 'Fraud/Scam', 'Business decision (waived)', 'Other'],
     errorTypes: ['Wrong amount charged', 'Wrong customer/agent billed', 'Duplicate entry', 'Wrong exchange rate', 'Wrong data bundle', 'Reconciliation mismatch', 'Other'],
     causedBy: ['Customer', 'Agent', 'Owner/Staff', 'System/Technical', 'Unclear']
   };
-  var LIST_KEYS = ['sales', 'agents', 'referrals', 'brackets', 'walletComm', 'evc', 'capital', 'errors'];
+  var LIST_KEYS = ['sales', 'agents', 'referrals', 'brackets', 'walletComm', 'evc', 'capital', 'errors', 'expenses'];
   function blankState() {
-    return { app: 'business-tracker', version: 1, sales: [], agents: [], referrals: [],
+    return { app: 'business-tracker', version: 2, sales: [], agents: [], referrals: [],
       brackets: [],
-      walletComm: [], evc: [], capital: [], errors: [], daily: {}, recon: {}, nextSeq: 1,
+      walletComm: [], evc: [], capital: [], errors: [], expenses: [], daily: {}, recon: {}, limits: {}, nextSeq: 1,
       settings: JSON.parse(JSON.stringify(DEFAULT_SETTINGS)), meta: { lastBackup: null } };
   }
   function normalize(s) {
     var out = Object.assign(blankState(), s || {});
-    out.settings = Object.assign(JSON.parse(JSON.stringify(DEFAULT_SETTINGS)), (s && s.settings) || {});
+    var def = JSON.parse(JSON.stringify(DEFAULT_SETTINGS)), given = (s && s.settings) || {};
+    out.settings = Object.assign(def, given);
+    out.settings.profile = Object.assign({ name: '', country: 'GM' }, given.profile || {});
+    out.settings.currency = Object.assign({ symbol: 'D', code: 'GMD' }, given.currency || {});
     out.meta = Object.assign({ lastBackup: null }, (s && s.meta) || {});
     if (!out.limits || typeof out.limits !== 'object') out.limits = {};
     LIST_KEYS.forEach(function (k) { if (!Array.isArray(out[k])) out[k] = []; });
@@ -59,6 +69,38 @@
     LIST_KEYS.forEach(function (k) { out[k].forEach(function (r) { if (r && !r.id && k !== 'brackets') r.id = uid(); if (r && r.seq > maxSeq) maxSeq = r.seq; }); });
     out.nextSeq = Math.max(out.nextSeq || 1, maxSeq + 1);
     return out;
+  }
+  function applyLocale() { C.setOptions(S.settings); if (window.THEMES) THEMES.apply(S.settings.theme); }
+  // One-time clean-ups. Run after online sync starts, so changes are saved online too.
+  function migrate() {
+    var changed = false, m = S.meta.mig || (S.meta.mig = {});
+    function fix(v) { return typeof v === 'string' ? v.replace(/comcash/gi, 'ComCach') : v; }
+    function fixList(list) { return (list || []).map(fix); }
+    if (!m.v2) {
+      ['channels', 'wallets', 'capitalAccounts'].forEach(function (k) { S.settings[k] = fixList(S.settings[k]); });
+      var caps = { 'Cash in hand': 'Cash in Hand', 'EVC stock': 'EVC Stock' };
+      S.settings.capitalAccounts = S.settings.capitalAccounts.map(function (x) { return caps[x] || x; });
+      if (JSON.stringify(S.settings.evcProviders) === JSON.stringify(['EVC Comium', 'Africell', 'Qcell', 'Other'])) S.settings.evcProviders = DEFAULT_SETTINGS.evcProviders.slice();
+      S.settings.channels = S.settings.channels.filter(function (x) { return x !== 'Other'; });
+      S.sales.forEach(function (r) { ['details', 'channel', 'notes', 'bank'].forEach(function (f) { if (r[f]) r[f] = fix(r[f]); }); });
+      S.agents.forEach(function (r) { ['desc', 'txType', 'notes'].forEach(function (f) { if (r[f]) r[f] = fix(r[f]); }); });
+      S.walletComm.forEach(function (r) { if (r.wallet) r.wallet = fix(r.wallet); });
+      var prov = { 'EVC Comium': 'Comium EVC', 'Africell': 'Africell EVC', 'Qcell': 'Qcell EVC' };
+      S.evc.forEach(function (r) { if (prov[r.provider]) r.provider = prov[r.provider]; });
+      S.capital.forEach(function (r) {
+        var b = {}; Object.keys(r.balances || {}).forEach(function (k) { var nk = caps[fix(k)] || fix(k); b[nk] = (b[nk] || 0) + num(r.balances[k]) || r.balances[k]; });
+        r.balances = b;
+      });
+      m.v2 = true; changed = true;
+    }
+    if (!m.v3) {
+      // Blank balance rows copied from the old spreadsheet say nothing and would cause false "money missing" warnings.
+      var before = S.capital.length;
+      S.capital = S.capital.filter(function (s) { return !C.snapEmpty(s) || (s.notes && String(s.notes).trim()); });
+      m.v3 = true; if (S.capital.length !== before) changed = true;
+    }
+    if (C.assignRefIds(S)) changed = true;
+    return changed;
   }
 
   var Store = {
@@ -108,12 +150,15 @@
   }
 
   /* ================= Navigation ================= */
-  var UI = { stack: [{ v: 'home' }], sheetOpen: false, salesQuery: '', salesFilter: 'all', custQuery: '', custFilter: 'all',
-    agentQuery: '', limit: 120, commTab: 'wallet', refTab: 'sales', shareType: 'Customer', shareKey: '', shareText: '' };
-  var TITLES = { home: APP_NAME, sales: 'Sales', agents: 'Agents', customers: 'Customers', more: 'More',
-    share: 'Share a statement', daily: 'Daily cash check', recon: 'Monthly reconciliation', losses: 'Losses and errors',
-    comm: 'Commissions', ref: 'Referral agents', capital: 'Capital portfolio', backup: 'Backup and restore',
-    settings: 'Settings', help: 'How it works', sync: 'Online sync', risk: 'Risk check' };
+  var UI = { stack: [{ v: 'home' }], sheetOpen: false, custQuery: '', custFilter: 'all',
+    agentQuery: '', limit: 120, commTab: 'wallet', refTab: 'sales', shareType: 'Customer', shareKey: '', shareText: '',
+    hType: 'all', hRange: 'all', hStatus: 'all', hChannel: '', hQuery: '', hFrom: '', hTo: '',
+    locked: false, pin: '', pinBuf: '', pinFirst: '', pinStep: 0, pinMsg: '', changing: false, forgot: false, gName: '', gCountry: 'GM', gateTab: 'create', bioOK: false };
+  var TITLES = { home: APP_NAME, agents: 'Agents', customers: 'Customers', history: 'History', settings: 'Settings',
+    share: 'Send a Reminder', daily: 'Daily Cash Check', recon: 'Monthly Balance Check', losses: 'Losses and Errors',
+    comm: 'Commissions', ref: 'Referral Agents', capital: 'Capital Portfolio', backup: 'Backup and Restore',
+    choices: 'Your Choices', help: 'How It Works', sync: 'Your Account', risk: 'Risk Check', security: 'Security',
+    look: 'Country, Currency and Theme', rules: 'Money Rules', expenses: 'Expenses and Money Out', profile: 'Your Details' };
   function cur() { return UI.stack[UI.stack.length - 1]; }
   function go(v) { UI.stack.push(v); history.pushState({ n: UI.stack.length }, ''); render(); window.scrollTo(0, 0); }
   function setTab(t) { UI.stack = [{ v: t }]; UI.limit = 120; render(); window.scrollTo(0, 0); }
@@ -143,6 +188,17 @@
     account: '<circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c1-3.6 3.8-5.5 7-5.5s6 1.9 7 5.5"/>',
     privacy: '<path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
     install: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+    history: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
+    eye: '<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.8"/>',
+    eyeoff: '<path d="M3 3l18 18M10.6 6a9.5 9.5 0 011.4-.1c6.4 0 10 6.1 10 6.1a17 17 0 01-3.2 3.9M6.6 7.4A16.7 16.7 0 002 12s3.6 6.5 10 6.5c1.5 0 2.9-.3 4.1-.9"/><path d="M9.9 9.9a3 3 0 004.2 4.2"/>',
+    lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>',
+    shield: '<path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/>',
+    finger: '<path d="M7 11a5 5 0 0110 0v2"/><path d="M5 14c0-1 .2-2 .5-3M9 21c-.5-1.5-.7-3-.7-4.7V11a3.7 3.7 0 017.4 0v3.5c0 2 .3 3.5 1 5M12 11v5c0 1.8.3 3.2.8 4.5"/>',
+    expense: '<path d="M12 3v12M8 11l4 4 4-4"/><path d="M4 18h16v3H4z"/>',
+    look: '<circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r="1.2"/><circle cx="12" cy="7.5" r="1.2"/><circle cx="16" cy="10" r="1.2"/><path d="M12 21c-1.5 0-2-1.4-1.3-2.4.7-1 2.3-.8 2.8-1.9.6-1.4-.6-2.7-2.2-2.7"/>',
+    rules: '<path d="M5 4h14v16H5z"/><path d="M9 9h6M9 13h6M9 17h3"/>',
+    device: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>',
+    list: '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
     risk: '<path d="M4 16a8 8 0 1116 0"/><path d="M12 16l4-5"/><circle cx="12" cy="16" r="1.4"/>'
   };
   function icon(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS[n] + '</svg>'; }
@@ -151,21 +207,21 @@
     var t = document.getElementById('toast');
     if (!t) { t = document.createElement('div'); t.id = 'toast'; t.className = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
     t.textContent = msg; t.style.display = 'block';
-    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.style.display = 'none'; }, 2400);
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.style.display = 'none'; }, Math.max(2400, msg.length * 65));
   }
   var STATUS_CLASS = { 'Paid': 'p-paid', 'Overpaid': 'p-overpaid', 'Outstanding': 'p-outstanding', 'Overdue': 'p-overdue', 'Bad debt': 'p-bad' };
   var TYPE_CLASS = { 'Regular': 'p-regular', 'Irregular': 'p-irregular', 'Inactive (90+ days)': 'p-inactive', 'Bad (high risk)': 'p-overdue', 'Do not give credit': 'p-bad' };
   function pill(text, cls) { return text ? '<span class="pill ' + (cls || 'p-paid') + '">' + esc(text) + '</span>' : ''; }
   function balanceText(b, big) {
     var cls = big ? 'big ' : 'amount ';
-    if (b > 0) return '<span class="' + cls + 'c-owed">To collect ' + money(b) + '</span>';
+    if (b > 0) return '<span class="' + cls + 'c-owed">To Collect ' + money(b) + '</span>';
     if (b < 0) return '<span class="' + cls + 'c-credit">Credit ' + money(-b) + '</span>';
     return '<span class="' + (big ? 'big ' : '') + 'c-muted" style="font-weight:600">Settled</span>';
   }
   function agentNetText(n, big) {
     var cls = big ? 'big ' : 'amount ';
-    if (n > 0) return '<span class="' + cls + 'c-owed">To collect ' + money(n) + '</span>';
-    if (n < 0) return '<span class="' + cls + '" style="color:var(--blue)">To pay ' + money(-n) + '</span>';
+    if (n > 0) return '<span class="' + cls + 'c-owed">To Collect ' + money(n) + '</span>';
+    if (n < 0) return '<span class="' + cls + '" style="color:var(--blue)">To Pay ' + money(-n) + '</span>';
     return '<span class="' + cls + 'c-muted">Settled</span>';
   }
   function kv(label, value) { return '<div class="kv"><span>' + esc(label) + '</span><b>' + value + '</b></div>'; }
@@ -178,59 +234,156 @@
     for (var i = 0; i < n; i++) { out.unshift(y + '-' + String(m).padStart(2, '0')); m--; if (m === 0) { m = 12; y--; } }
     return out;
   }
-  function byNewest(a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : (b.seq || 0) - (a.seq || 0); }
+  function byNewest(a, b) {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    var ta = a.time || '', tb = b.time || '';
+    if (ta !== tb) return ta < tb ? 1 : -1;
+    return (b.seq || 0) - (a.seq || 0);
+  }
+  function phoneLine(stored) {
+    var p = C.phoneInfo(stored);
+    if (p.empty) return 'No phone';
+    return p.display + (p.network ? ' · ' + p.network : p.country && p.iso !== S.settings.profile.country ? ' · ' + p.country : '');
+  }
 
   /* ================= Render ================= */
   function managed() { return !!(window.Sync && Sync.status().managed); }
-  function needsGate() {
-    if (!managed()) return false;
-    var s = Sync.status();
-    return !s.signedIn && !S.meta.ownerUid && !S.meta.skipAccount;
+  function signedIn() { return !!(window.Sync && Sync.status().signedIn); }
+  function countryOptions(sel) {
+    var list = COUNTRIES.list.slice().sort(function (x, y) { return x.iso === 'GM' ? -1 : y.iso === 'GM' ? 1 : x.name.localeCompare(y.name); });
+    return list.map(function (c) { return '<option value="' + c.iso + '"' + (c.iso === sel ? ' selected' : '') + '>' + esc(c.name) + ' (+' + c.dial + ')</option>'; }).join('');
   }
-  function signInForm(intro) {
-    return '<div class="card"><b>Sign in</b><p class="hint" style="margin:6px 0 10px">' + intro + '</p>' +
-      '<div class="field"><label for="sync-email">Email</label><input id="sync-email" type="email" autocomplete="username" value="' + esc(UI.syncEmail || '') + '"></div>' +
-      '<div class="field"><label for="sync-pass">Password, at least 6 characters</label><input id="sync-pass" type="password" autocomplete="current-password"></div>' +
-      '<div id="sync-msg"></div><div class="actions"><button class="btn kiosk" data-act="syncSignUp">Create account</button><button class="btn primary" data-act="syncSignIn">Sign in</button></div>' +
-      '<button class="btn block" data-act="syncReset" style="border:0;background:none;color:var(--ink-soft)">Forgot password?</button></div>';
+  // Sign-up sets the country and its currency but keeps the Classic colours. A country's own colours are a choice (Settings, Look).
+  function setCountry(iso, withTheme) {
+    var c = COUNTRIES.get(iso) || COUNTRIES.get('GM');
+    S.settings.profile.country = c.iso; S.settings.currency = { symbol: c.cur, code: c.code };
+    if (withTheme) S.settings.theme = c.theme;
+    applyLocale();
   }
-  function gateHTML() {
-    var s = Sync.status();
-    var note = s.phase === 'nosdk' ? '<div class="form-info">You are offline. Connect to the internet to create an account or sign in, or continue without an account for now.</div>'
+  function gateState() {
+    if (UI.changing) return 'pinsetup';
+    if (UI.forgot && window.Security && Security.enabled()) return 'forgot';
+    if (UI.locked && window.Security && Security.enabled()) return 'lock';
+    if (signedIn() && Security.passwordDue()) return 'password';
+    var st = window.Sync ? Sync.status() : {};
+    if (managed() && !st.signedIn && !S.meta.ownerUid && !S.meta.skipAccount) return 'welcome';
+    var ready = !st.signedIn || st.ready;
+    if (!S.settings.profile.name && !S.meta.profileSkipped && ready) return 'profile';
+    if (!Security.enabled() && !S.meta.pinSkipped && (st.signedIn || !managed()) && ready) return 'pinsetup';
+    return null;
+  }
+  var FEATURES = [['sales', 'Record data sales, deposits and wallet transfers'], ['agents', 'Track agent deals and float, both ways'],
+    ['risk', 'See who owes you and who might not pay'], ['capital', 'Check that your money balances every day']];
+  function featureList() {
+    return '<ul class="feat">' + FEATURES.map(function (f) { return '<li><span class="ic">' + icon(f[0]) + '</span>' + esc(f[1]) + '</li>'; }).join('') + '</ul>';
+  }
+  function gateWelcome() {
+    var s = Sync.status(), tab = UI.gateTab;
+    var note = s.phase === 'nosdk' ? '<div class="form-info">You are offline. You can use the app on this phone now and create an account later.</div>'
       : s.phase === 'loading' ? '<div class="form-info">Connecting…</div>' : '';
-    return '<div class="gate"><div class="gate-brand"><img src="icon-192.png" alt="" width="84" height="84"><h1>' + esc(APP_NAME) + '</h1>' +
-      '<p>Record data sales, wallet transfers and agent deals. Track every debt. Works without internet.</p><div class="flagline"></div></div>' +
-      note + signInForm('New here? Choose an email and a password, then tap Create account. Already have an account? Tap Sign in.') +
-      '<button class="btn block" data-act="skipAccount">Continue without an account</button>' +
-      '<p class="hint" style="text-align:center;margin-top:14px">Without an account your records stay only on this phone. ' +
-      'By creating an account you accept the <a href="privacy.html" target="_blank" rel="noopener">privacy policy</a>.</p></div>';
+    var panel;
+    if (tab === 'create') panel = '<div class="card"><div class="field"><label for="gc-name">Your name or business name</label><input id="gc-name" autocomplete="organization" value="' + esc(UI.gName || '') + '"></div>' +
+      '<div class="field"><label for="gc-country">Country</label><select id="gc-country">' + countryOptions(UI.gCountry || 'GM') + '</select></div>' +
+      '<div class="field"><label for="sync-email">Email</label><input id="sync-email" type="email" autocomplete="username" value="' + esc(UI.syncEmail || '') + '"></div>' +
+      '<div class="field"><label for="sync-pass">Password, at least 6 characters</label><input id="sync-pass" type="password" autocomplete="new-password"></div>' +
+      '<div id="sync-msg"></div><button class="btn kiosk block" data-act="gateCreate">Create my account</button>' +
+      '<p class="hint" style="text-align:center;margin:10px 0 0">By continuing you accept the <a href="privacy.html" target="_blank" rel="noopener">privacy policy</a>.</p></div>';
+    else if (tab === 'signin') panel = '<div class="card"><div class="field"><label for="sync-email">Email</label><input id="sync-email" type="email" autocomplete="username" value="' + esc(UI.syncEmail || '') + '"></div>' +
+      '<div class="field"><label for="sync-pass">Password</label><input id="sync-pass" type="password" autocomplete="current-password"></div>' +
+      '<div id="sync-msg"></div><button class="btn primary block" data-act="gateSignIn">Sign in</button>' +
+      '<button class="btn block" data-act="syncReset" style="border:0;background:none;color:var(--ink-soft)">Forgot password?</button></div>';
+    else panel = '<div class="card"><p class="hint" style="margin:0 0 10px">Your records stay only on this phone. You can create an account later to keep them online.</p>' +
+      '<div class="field"><label for="gc-name">Your name or business name</label><input id="gc-name" value="' + esc(UI.gName || '') + '"></div>' +
+      '<div class="field"><label for="gc-country">Country</label><select id="gc-country">' + countryOptions(UI.gCountry || 'GM') + '</select></div>' +
+      '<div id="sync-msg"></div><button class="btn primary block" data-act="gateLocal">Start using the app</button></div>';
+    return '<div class="gate bright"><div class="gate-brand"><img src="icon-192.png" alt="" width="92" height="92"><h1>' + esc(APP_NAME) + '</h1>' +
+      '<p>Record data sales, wallet transfers and agent deals. Track every debt. Works without internet.</p></div>' + featureList() + note +
+      seg('gateTab', tab, [['create', 'Create account'], ['signin', 'Sign in'], ['local', 'This phone only']]) + panel + '</div>';
   }
+  function gateProfile() {
+    var p = S.settings.profile;
+    return '<div class="gate bright"><div class="gate-brand"><img src="icon-192.png" alt="" width="80" height="80"><h1>Welcome</h1>' +
+      '<p>Tell us who this account belongs to. Your name appears on your home screen.</p></div><div class="card">' +
+      '<div class="field"><label for="gp-name">Your name or business name</label><input id="gp-name" autocomplete="organization" value="' + esc(p.name) + '"></div>' +
+      '<div class="field"><label for="gp-country">Country</label><select id="gp-country">' + countryOptions(p.country) + '</select><div class="note">Sets your currency, phone numbers and colours. You can change them later.</div></div>' +
+      '<div id="gp-msg"></div><button class="btn primary block" data-act="saveProfileGate">Continue</button>' +
+      '<button class="btn block" data-act="skipProfile" style="border:0;background:none;color:var(--ink-soft)">Skip for now</button></div>' +
+      (S.sales.length || S.agents.length ? '' : '<button class="btn block" data-act="importBackup">I have a backup file to restore</button><input type="file" id="importFile" accept=".json,application/json" hidden>') + '</div>';
+  }
+  function dots(n, filled) { var h = ''; for (var i = 0; i < n; i++) h += '<i class="' + (i < filled ? 'on' : '') + '"></i>'; return '<div class="pin-dots">' + h + '</div>'; }
+  function keypad(withBio) {
+    var keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'bio', '0', 'del'];
+    return '<div class="pad">' + keys.map(function (k) {
+      if (k === 'bio') return withBio ? '<button class="pk" data-act="pinBio" aria-label="Use fingerprint">' + icon('finger') + '</button>' : '<span></span>';
+      if (k === 'del') return '<button class="pk" data-act="pinDel" aria-label="Delete">⌫</button>';
+      return '<button class="pk" data-act="pinKey" data-k="' + k + '">' + k + '</button>';
+    }).join('') + '</div>';
+  }
+  function gateLock() {
+    var cfg = Security.cfg(), n = cfg.pinLen || 4, name = S.settings.profile.name;
+    var wait = cfg.lockUntil && cfg.lockUntil > Date.now() ? Math.ceil((cfg.lockUntil - Date.now()) / 1000) : 0;
+    return '<div class="gate lockscreen"><div class="gate-brand"><img src="icon-192.png" alt="" width="72" height="72"><h1>' + (name ? 'Welcome back,<br>' + esc(name) : 'Enter your PIN') + '</h1>' +
+      '<p>' + (UI.pinMsg ? esc(UI.pinMsg) : 'Enter your PIN to open your records') + '</p></div>' + dots(n, UI.pin.length) +
+      (wait ? '<div class="form-error" style="text-align:center">Too many wrong tries. Wait ' + wait + ' seconds.</div>' : '') +
+      keypad(Security.bioEnabled()) +
+      '<button class="btn block" data-act="lockForgot" style="border:0;background:none;color:var(--ink-soft)">Forgot PIN?</button></div>';
+  }
+  function gatePin() {
+    var steps = ['', 'Choose a PIN', 'Type the PIN again', 'Use your fingerprint too?'], step = UI.pinStep || (UI.changing ? 0 : 1);
+    var title = step === 0 ? 'Enter your current PIN' : steps[step];
+    if (step === 3) return '<div class="gate lockscreen"><div class="gate-brand"><span class="bigic">' + icon('finger') + '</span><h1>Use your fingerprint?</h1>' +
+      '<p>Open the app with your fingerprint or face, instead of typing the PIN each time. The PIN still works as a back-up.</p></div>' +
+      '<button class="btn primary block" data-act="enableBio">Use fingerprint</button><button class="btn block" data-act="pinDone" style="margin-top:8px">Not now</button></div>';
+    var n = step === 2 ? UI.pinFirst.length : 6;
+    return '<div class="gate lockscreen"><div class="gate-brand"><span class="bigic">' + icon('lock') + '</span><h1>' + title + '</h1>' +
+      '<p>' + (UI.pinMsg ? esc(UI.pinMsg) : step === 1 ? 'Protect your records. Choose 4 to 6 digits that only you know.' : step === 2 ? 'Type the same PIN once more.' : 'Type your PIN to continue.') + '</p></div>' +
+      dots(step === 0 ? (Security.cfg().pinLen || 4) : n, UI.pinBuf.length) + keypad(false) +
+      (step === 1 && UI.pinBuf.length >= 4 && UI.pinBuf.length < 6 ? '<button class="btn primary block" data-act="pinNext">Continue</button>' : '') +
+      (!signedIn() && !UI.changing ? '<button class="btn block" data-act="pinSkip" style="border:0;background:none;color:var(--ink-soft)">Not now</button>' : '') +
+      (UI.changing ? '<button class="btn block" data-act="pinCancel" style="border:0;background:none;color:var(--ink-soft)">Cancel</button>' : '') + '</div>';
+  }
+  function gatePassword() {
+    var st = Sync.status();
+    return '<div class="gate bright"><div class="gate-brand"><span class="bigic">' + icon('shield') + '</span><h1>Please sign in again</h1>' +
+      '<p>For your safety, the app asks for your password every ' + Security.expireDays() + ' days.</p></div><div class="card">' +
+      '<div class="field"><label>Email</label><input value="' + esc(st.email) + '" readonly></div>' +
+      '<div class="field"><label for="gw-pass">Password</label><input id="gw-pass" type="password" autocomplete="current-password"></div>' +
+      '<div id="gw-msg"></div><button class="btn primary block" data-act="passwordContinue">Continue</button>' +
+      '<button class="btn block" data-act="passwordSignOut" style="border:0;background:none;color:var(--ink-soft)">Sign out</button></div></div>';
+  }
+  var GATES = { welcome: gateWelcome, profile: gateProfile, lock: gateLock, pinsetup: gatePin, password: gatePassword, forgot: gateForgot };
   function render() {
-    var v = cur(), root = document.getElementById('app');
-    if (needsGate()) { root.innerHTML = gateHTML(); return; }
+    var v = cur(), root = document.getElementById('app'), g = gateState(); UI.lastGate = g;
+    document.body.classList.toggle('hide-amounts', !!S.meta.hideAmounts);
+    if (g) {
+      if (UI.sheetOpen) removeSheet();
+      root.innerHTML = GATES[g]();
+      if (g === 'lock' && Security.bioEnabled() && !UI.bioTried) { UI.bioTried = true; setTimeout(function () { ACT.pinBio(); }, 300); }
+      return;
+    }
     var title = TITLES[v.v] || '';
-    if (v.v === 'sync' && managed()) title = 'Your account';
     if (v.v === 'customer') { var c = findCustomer(v.key); title = c ? (c.name || c.phone) : 'Customer'; }
     if (v.v === 'agent') { var a = findAgent(v.key); title = a ? a.name : 'Agent'; }
     var top = '<header class="topbar">' + (UI.stack.length > 1 ? '<button class="back" data-act="back" aria-label="Back">‹</button>' : '') +
-      '<h1>' + esc(title) + '</h1>' + syncBadge() + '</header>';
+      '<h1>' + esc(title) + '</h1>' + syncBadge() +
+      '<button class="eye" data-act="toggleHide" aria-label="' + (S.meta.hideAmounts ? 'Show amounts' : 'Hide amounts') + '">' + icon(S.meta.hideAmounts ? 'eyeoff' : 'eye') + '</button></header>';
     var body = (VIEWS[v.v] || VIEWS.home)(v);
     root.innerHTML = top + '<main>' + body + '</main>' + navBar() + fab(v);
     if (LISTS[v.v]) renderList();
   }
   function navBar() {
     var t = UI.stack[0].v;
-    var items = [['home', 'Home'], ['sales', 'Sales'], ['agents', 'Agents'], ['customers', 'Customers'], ['more', 'More']];
+    var items = [['home', 'Home'], ['customers', 'Customers'], ['agents', 'Agents'], ['history', 'History'], ['settings', 'Settings']];
     return '<nav class="nav" aria-label="Main">' + items.map(function (i) {
       return '<button data-act="tab" data-v="' + i[0] + '" class="' + (t === i[0] ? 'on' : '') + '"' + (t === i[0] ? ' aria-current="page"' : '') + '>' + icon(i[0]) + '<span>' + i[1] + '</span></button>';
     }).join('') + '</nav>';
   }
   function fab(v) {
-    var map = { sales: ['newSale', 'New sale'], customers: ['newSale', 'New sale'], customer: ['newSaleFor', 'New sale'],
-      agents: ['newAgent', 'New agent entry'], agent: ['newAgentFor', 'New entry'], losses: ['newError', 'Log an error'],
-      capital: ['newCapital', 'New snapshot'] };
-    if (v.v === 'comm') map.comm = UI.commTab === 'evc' ? ['newEvc', 'New EVC entry'] : UI.commTab === 'wallet' ? ['newWallet', 'New commission'] : null;
-    if (v.v === 'ref' && UI.refTab === 'sales') map.ref = ['newRef', 'New referral sale'];
+    var map = { history: ['newSale', 'New Sale'], customers: ['newSale', 'New Sale'], customer: ['newSaleFor', 'New Sale'],
+      agents: ['newAgent', 'New Agent Entry'], agent: ['newAgentFor', 'New Entry'], losses: ['newError', 'Log an Error'],
+      capital: ['newCapital', 'Record Balances'], daily: ['newCapital', 'Record Balances'], expenses: ['newExpense', 'New Expense'] };
+    if (v.v === 'comm') map.comm = UI.commTab === 'evc' ? ['newEvc', 'New EVC Entry'] : UI.commTab === 'wallet' ? ['newWallet', 'New Commission'] : null;
+    if (v.v === 'ref' && UI.refTab === 'sales') map.ref = ['newRef', 'New Referral Sale'];
     var f = map[v.v];
     if (!f) return '';
     return '<button class="fab" data-act="' + f[0] + '" data-key="' + esc(v.key || '') + '"><span class="plus" aria-hidden="true">+</span>' + f[1] + '</button>';
@@ -242,37 +395,53 @@
   /* ================= Views ================= */
   var VIEWS = {};
 
+  function tip(mode) { return mode === 'included' ? 'Tips (inside payments)' : mode === 'passon' ? 'Tips to Hand Over' : 'Tips (extra income)'; }
+  function tile(color, act, v, ic, title, sub) {
+    return '<button class="tile ' + color + '" data-act="' + act + '" data-v="' + v + '"><span class="ic">' + icon(ic) + '</span><b>' + esc(title) + '</b><small>' + esc(sub) + '</small></button>';
+  }
+  function recordSections() {
+    var rk = R.risk.summary;
+    return '<div class="section-title">Sales and Customers</div><div class="tiles">' +
+      tile('green', 'tab', 'history', 'history', 'History', 'Every day, with filters') + tile('blue', 'tab', 'customers', 'customers', 'Customers', R.customers.length + ' customers') +
+      tile('red', 'go', 'risk', 'risk', 'Risk Check', rk.high ? rk.high + ' high risk' : 'Who might not pay') + tile('green', 'go', 'share', 'chat', 'Send a Reminder', 'On WhatsApp') + '</div>' +
+      '<div class="section-title">Agents and Partners</div><div class="tiles">' +
+      tile('blue', 'tab', 'agents', 'agents', 'Agents', 'Float and deals') + tile('blue', 'go', 'ref', 'customers', 'Referral Agents', 'Sales for other agents') +
+      tile('green', 'go', 'comm', 'comm', 'Commissions', 'Wallets and EVC') + '</div>' +
+      '<div class="section-title">Money</div><div class="tiles">' +
+      tile('green', 'go', 'daily', 'cash', 'Daily Cash Check', 'Does your money balance?') + tile('blue', 'go', 'recon', 'recon', 'Monthly Balance Check', 'Month by month') +
+      tile('blue', 'go', 'capital', 'capital', 'Capital Portfolio', 'Available and working capital') + tile('red', 'go', 'expenses', 'expense', 'Expenses and Money Out', money(R.expenses.total) + ' recorded') +
+      tile('red', 'go', 'losses', 'loss', 'Losses and Errors', 'Write-offs and mistakes') + '</div>';
+  }
   VIEWS.home = function () {
     var t = R.totals, today = R.today, month = today.slice(0, 7), h = '';
-    var hasData = S.sales.length || S.agents.length;
-    var todays = R.sales.filter(function (r) { return r.date === today && r.billedSet; });
-    var recvToday = todays.reduce(function (a, r) { return a + num(r.received) + num(r.tip); }, 0);
-    h += backupBanner();
-    if (!hasData) {
-      h += '<div class="card"><b>Welcome to ' + esc(APP_NAME) + '.</b><p class="hint" style="margin:6px 0 12px">Record your sales, customers, agents and commissions. It works without internet, and your records stay on this phone. ' +
-        'Start with the yellow New sale button. You can change payment channels and wallets in Settings.</p>' +
-        '<div class="actions" style="margin:0"><button class="btn primary" data-act="go" data-v="settings">Settings</button>' +
-        '<button class="btn" data-act="go" data-v="sync">Keep records online</button>' +
-        '<button class="btn" data-act="go" data-v="backup">Restore from a backup</button></div></div>';
-    }
-    h += '<div class="today-strip"><div><div class="label">Received today, ' + esc(shortDate(today)) + '</div><div class="big">' + money(recvToday) + '</div></div>' +
-      '<div style="text-align:right"><div class="label">Entries today</div><div class="big">' + todays.length + '</div></div></div>';
-    h += '<div class="quick">' + qa('green', 'newSale', 'plus', 'New sale') + qa('green', 'newPayment', 'pay', 'Customer paid') +
-      qa('blue', 'newAgent', 'agents', 'Agent entry') + qa('red', 'go', 'chat', 'Send reminder', 'share') + '</div>';
+    var hasData = S.sales.length || S.agents.length, name = S.settings.profile.name;
+    var dayNow = R.daily.filter(function (d) { return d.date === today; })[0] || { count: 0, received: 0 };
+    h += backupBanner() + (typeof deviceBanner === 'function' ? deviceBanner() : '');
+    h += '<div class="hero"><div class="hello">' + (name ? 'Welcome, <b>' + esc(name) + '</b>' : 'Welcome') + '</div><div class="hdate">' + esc(readable(today)) + '</div>' +
+      '<div class="hero-nums"><div><div class="label">Money received today</div><div class="big">' + money(dayNow.received) + '</div></div>' +
+      '<div style="text-align:right"><div class="label">Entries today</div><div class="big">' + dayNow.count + '</div></div></div></div>';
+    if (!hasData) h += '<div class="card"><b>Ready when you are</b><p class="hint" style="margin:6px 0 0">Tap New Sale to record your first sale. Everything you record shows up here.</p></div>';
+    h += '<div class="quick">' + qa('green', 'newSale', 'plus', 'New Sale') + qa('green', 'newPayment', 'pay', 'Customer Paid') +
+      qa('blue', 'newAgent', 'agents', 'Agent Entry') + qa('red', 'newExpense', 'expense', 'Money Out') +
+      qa('blue', 'newCapital', 'cash', 'Record Balances') + qa('blue', 'go', 'chat', 'Send Reminder', 'share') + '</div>';
     var owingCount = R.customers.filter(function (c) { return c.owed > 0; }).length;
     var agentSplit = { collect: 0, pay: 0 };
     R.agents.balances.forEach(function (x) { if (x.net > 0) agentSplit.collect += x.net; else agentSplit.pay -= x.net; });
     h += riskCard();
     var lossM = (R.losses.byMonth.filter(function (x) { return x.month === month; })[0] || {}).amount || 0;
     var commM = (R.commMonths.filter(function (x) { return x.month === month; })[0] || {}).total || 0;
+    var mNow = R.months.filter(function (x) { return x.month === month; })[0] || { tips: 0, billed: 0, paid: 0 };
     h += '<div class="figures">' +
-      '<button class="figure" data-act="custFilterGo" data-v="owing" style="text-align:left"><div class="label">To collect from customers</div><div class="big c-owed">' + money(t.owed) + '</div><div class="sub">' + owingCount + ' customer' + (owingCount === 1 ? '' : 's') + '</div></button>' +
-      '<button class="figure" data-act="custFilterGo" data-v="credit" style="text-align:left"><div class="label">Paid in advance by customers</div><div class="big c-credit">' + money(t.credit) + '</div><div class="sub">Used on their next purchases</div></button>' +
-      '<button class="figure" data-act="tab" data-v="agents" style="text-align:left"><div class="label">To collect from agents</div><div class="big c-owed">' + money(agentSplit.collect) + '</div><div class="sub">To pay agents: ' + money(agentSplit.pay) + '</div></button>' +
-      '<button class="figure" data-act="salesFilterGo" data-v="overdue" style="text-align:left"><div class="label">Overdue sales</div><div class="big ' + (t.overdue ? 'c-late' : '') + '">' + t.overdue + '</div><div class="sub">Unpaid for over 3 days</div></button>' +
-      '<button class="figure" data-act="go" data-v="losses" style="text-align:left"><div class="label">Losses this month</div><div class="big ' + (lossM ? 'c-late' : '') + '">' + money(lossM) + '</div><div class="sub">All time ' + money(R.losses.total) + '</div></button>' +
-      '<button class="figure" data-act="go" data-v="comm" style="text-align:left"><div class="label">Commission this month</div><div class="big c-credit">' + money(commM) + '</div><div class="sub">All time ' + money(t.commission) + '</div></button>' +
+      '<button class="figure" data-act="custFilterGo" data-v="owing" style="text-align:left"><div class="label">To Collect from Customers</div><div class="big c-owed">' + money(t.owed) + '</div><div class="sub">' + owingCount + ' customer' + (owingCount === 1 ? '' : 's') + '</div></button>' +
+      '<button class="figure" data-act="custFilterGo" data-v="credit" style="text-align:left"><div class="label">Paid in Advance</div><div class="big c-credit">' + money(t.credit) + '</div><div class="sub">Used on their next purchases</div></button>' +
+      '<button class="figure" data-act="tab" data-v="agents" style="text-align:left"><div class="label">To Collect from Agents</div><div class="big c-owed">' + money(agentSplit.collect) + '</div><div class="sub">To pay agents: ' + money(agentSplit.pay) + '</div></button>' +
+      '<button class="figure" data-act="salesFilterGo" data-v="overdue" style="text-align:left"><div class="label">Overdue Sales</div><div class="big ' + (t.overdue ? 'c-late' : '') + '">' + t.overdue + '</div><div class="sub">Unpaid for over 3 days</div></button>' +
+      '<button class="figure" data-act="go" data-v="rules" style="text-align:left"><div class="label">' + tip(R.tipMode) + '</div><div class="big c-credit">' + money(mNow.tips) + '</div><div class="sub">This month. All time ' + money(t.tips) + '</div></button>' +
+      '<button class="figure" data-act="go" data-v="comm" style="text-align:left"><div class="label">Commission This Month</div><div class="big c-credit">' + money(commM) + '</div><div class="sub">All time ' + money(t.commission) + '</div></button>' +
+      '<button class="figure" data-act="go" data-v="losses" style="text-align:left"><div class="label">Losses This Month</div><div class="big ' + (lossM ? 'c-late' : '') + '">' + money(lossM) + '</div><div class="sub">All time ' + money(R.losses.total) + '</div></button>' +
+      '<button class="figure" data-act="go" data-v="capital" style="text-align:left"><div class="label">Working Capital</div><div class="big">' + (R.capital.rows[0] ? money(R.capital.rows[0].working) : '—') + '</div><div class="sub">' + (R.capital.rows[0] ? 'From ' + esc(shortDate(R.capital.rows[0].date)) : 'Record your balances') + '</div></button>' +
       '</div>';
+    h += recordSections();
     h += chartMonthly() + chartTopOwing() + chartCustomerMix() + chartCommission();
     return h;
   };
@@ -291,21 +460,21 @@
 
   function chartMonthly() {
     var months = lastMonths(6), map = {};
-    R.recon.forEach(function (m) { map[m.month] = m; });
+    R.months.forEach(function (m) { map[m.month] = m; });
     var max = 1;
-    months.forEach(function (k) { var m = map[k] || {}; max = Math.max(max, num(m.billed), num(m.received)); });
+    months.forEach(function (k) { var m = map[k] || {}; max = Math.max(max, num(m.billed), num(m.paid)); });
     var cols = months.map(function (k) {
       var m = map[k] || {};
       return '<div class="grp" title="' + esc(monthName(k)) + '">' +
         '<div class="bar" style="background:var(--blue);height:' + (num(m.billed) / max * 100).toFixed(1) + '%"></div>' +
-        '<div class="bar" style="background:var(--credit);height:' + (num(m.received) / max * 100).toFixed(1) + '%"></div></div>';
+        '<div class="bar" style="background:var(--credit);height:' + (num(m.paid) / max * 100).toFixed(1) + '%"></div></div>';
     }).join('');
     var labels = months.map(function (k) { return '<span>' + MONTHS[Number(k.slice(5)) - 1].slice(0, 3) + '</span>'; }).join('');
     var cur = map[R.today.slice(0, 7)] || {};
-    return '<div class="chart"><h3>Billed and received, last 6 months</h3>' +
-      '<div class="legend"><span><i style="background:var(--blue)"></i>Billed</span><span><i style="background:var(--credit)"></i>Received</span>' + (max > 1 ? '<span>Highest: ' + compact(max) + '</span>' : '') + '</div>' +
+    return '<div class="chart"><h3>Billed and Paid, Last 6 Months</h3>' +
+      '<div class="legend"><span><i style="background:var(--blue)"></i>Billed</span><span><i style="background:var(--credit)"></i>Paid</span>' + (max > 1 ? '<span>Highest: ' + compact(max) + '</span>' : '') + '</div>' +
       '<div class="cols" role="img" aria-label="Billed and received by month">' + cols + '</div><div class="col-labels">' + labels + '</div>' +
-      '<p class="hint" style="margin:8px 0 0">This month: billed ' + money(cur.billed || 0) + ', received ' + money(cur.received || 0) + '.</p></div>';
+      '<p class="hint" style="margin:8px 0 0">This month: billed ' + money(cur.billed || 0) + ', paid ' + money(cur.paid || 0) + (num(cur.tips) ? ', tips ' + money(cur.tips) : '') + '.</p></div>';
   }
   function hbars(items, color) {
     var max = 1; items.forEach(function (i) { max = Math.max(max, Math.abs(i.value)); });
@@ -334,63 +503,114 @@
     return '<div class="chart"><h3>Commission by wallet and EVC</h3><p class="hint" style="margin:0 0 6px">Net, after royalties and agent shares.</p>' + hbars(items, 'var(--credit)') + '</div>';
   }
 
-  /* ----- Sales ----- */
-  VIEWS.sales = function () {
-    return '<input class="search" id="q-sales" type="search" placeholder="Search name, phone or ref" aria-label="Search sales" value="' + esc(UI.salesQuery) + '">' +
-      '<div class="chips">' + [['all', 'All'], ['owing', 'Not paid'], ['overdue', 'Overdue'], ['overpaid', 'Overpaid'], ['DS', 'Data / deposit'], ['WE', 'Wallet exchange']].map(function (c) {
-        return '<button data-act="salesFilter" data-v="' + c[0] + '" class="' + (UI.salesFilter === c[0] ? 'on' : '') + '">' + c[1] + '</button>';
-      }).join('') + '</div><button class="btn block" data-act="openBatch" style="margin-bottom:10px">Record several sales at once</button><div id="list"></div>';
-  };
+  /* ----- History: every day, every kind of entry ----- */
   var LISTS = {};
-  LISTS.sales = function () {
-    var q = UI.salesQuery.trim().toLowerCase(), f = UI.salesFilter;
-    var rows = R.sales.filter(function (r) {
-      if (f === 'owing' && !(r.balance > 0)) return false;
-      if (f === 'overdue' && r.status !== 'Overdue') return false;
-      if (f === 'overpaid' && r.status !== 'Overpaid') return false;
-      if ((f === 'DS' || f === 'WE') && (r.kind === 'WE' ? 'WE' : 'DS') !== f) return false;
-      if (q && (String(r.name) + ' ' + r.phone + ' ' + r.refId + ' ' + r.details + ' ' + r.beneficiary).toLowerCase().indexOf(q) < 0) return false;
-      return true;
-    }).sort(byNewest);
-    if (!rows.length) return S.sales.length ? empty('No matching sales', 'Try a different search or filter.') : empty('No sales yet', 'Tap the yellow button to add your first sale.');
-    return groupedList(rows, saleRow);
+  var H_TYPES = [['all', 'Everything'], ['data', 'Data / Deposit'], ['exchange', 'Wallet Exchange'], ['payment', 'Customer Paid'], ['agent', 'Agent Entries'], ['referral', 'Referral Sales'], ['expense', 'Money Out']];
+  var H_RANGES = [['all', 'All Time'], ['today', 'Today'], ['yesterday', 'Yesterday'], ['week', 'Last 7 Days'], ['month', 'This Month'], ['custom', 'Pick Dates']];
+  function histRows() {
+    var out = [];
+    R.sales.forEach(function (r) { out.push({ t: r.isPayment ? 'payment' : r.kind === 'WE' ? 'exchange' : 'data', date: r.date, time: r.time || '', seq: r.seq || 0, rec: r }); });
+    R.agents.rows.forEach(function (r) { out.push({ t: 'agent', date: r.date, time: r.time || '', seq: r.seq || 0, rec: r }); });
+    R.referrals.rows.forEach(function (r) { out.push({ t: 'referral', date: r.date, time: r.time || '', seq: r.seq || 0, rec: r }); });
+    R.expenses.rows.forEach(function (r) { out.push({ t: 'expense', date: r.date, time: r.time || '', seq: r.seq || 0, rec: r }); });
+    return out;
+  }
+  function entryNewer(a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : a.time < b.time ? 1 : a.time > b.time ? -1 : b.seq - a.seq; }
+  function inHistRange(d) {
+    var r = UI.hRange, T = R.today;
+    if (r === 'all') return true;
+    if (r === 'today') return d === T;
+    if (r === 'yesterday') return d === addDays(T, -1);
+    if (r === 'week') return d >= addDays(T, -6) && d <= T;
+    if (r === 'month') return d.slice(0, 7) === T.slice(0, 7);
+    if (r === 'custom') return (!UI.hFrom || d >= UI.hFrom) && (!UI.hTo || d <= UI.hTo);
+    return true;
+  }
+  function channelsUsed() {
+    var set = {}; S.sales.forEach(function (r) { if (r.channel) set[r.channel] = 1; });
+    return Object.keys(set).sort();
+  }
+  VIEWS.history = function () {
+    var chips = function (act, cur, list) {
+      return '<div class="chips">' + list.map(function (c) { return '<button data-act="' + act + '" data-v="' + c[0] + '" class="' + (cur === c[0] ? 'on' : '') + '">' + esc(c[1]) + '</button>'; }).join('') + '</div>';
+    };
+    return '<input class="search" id="q-hist" type="search" placeholder="Search name, phone, reference or details" aria-label="Search history" value="' + esc(UI.hQuery) + '">' +
+      chips('hType', UI.hType, H_TYPES) + chips('hRange', UI.hRange, H_RANGES) +
+      (UI.hRange === 'custom' ? '<div class="two"><div class="field"><label for="h-from">From</label><input id="h-from" type="date" value="' + esc(UI.hFrom) + '"></div><div class="field"><label for="h-to">To</label><input id="h-to" type="date" value="' + esc(UI.hTo) + '"></div></div>' : '') +
+      '<div class="two"><div class="field"><label for="h-status">Payment Status</label><select id="h-status">' + [['all', 'All'], ['notpaid', 'Not Fully Paid'], ['overdue', 'Overdue'], ['paid', 'Paid or Overpaid']].map(function (o) { return '<option value="' + o[0] + '"' + (UI.hStatus === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
+      '<div class="field"><label for="h-chan">Paid Through</label><select id="h-chan"><option value="">All</option>' + channelsUsed().map(function (c) { return '<option' + (UI.hChannel === c ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></div></div>' +
+      '<div id="hist-count" class="hint"></div><div id="list"></div>';
   };
-  function groupedList(rows, rowFn) {
-    var shown = rows.slice(0, UI.limit), h = '', lastM = '', lastD = '';
-    var monthStats = {}; R.recon.forEach(function (m) { monthStats[m.month] = m; });
+  LISTS.history = function () {
+    var q = UI.hQuery.trim().toLowerCase(), t = UI.hType, st = UI.hStatus, ch = UI.hChannel;
+    var rows = histRows().filter(function (e) {
+      if (t !== 'all' && e.t !== t) return false;
+      if (!inHistRange(e.date || '')) return false;
+      var r = e.rec, isSale = e.t === 'data' || e.t === 'exchange' || e.t === 'payment';
+      if (st !== 'all') {
+        if (!isSale) return false;
+        if (st === 'notpaid' && !(r.remaining > 0)) return false;
+        if (st === 'overdue' && r.status !== 'Overdue') return false;
+        if (st === 'paid' && !(r.status === 'Paid' || r.status === 'Overpaid')) return false;
+      }
+      if (ch) { if (!isSale || r.channel !== ch) return false; }
+      if (q && (String(r.name || r.agent || r.client || r.category || '') + ' ' + (r.phone || '') + ' ' + (r.agentPhone || '') + ' ' + (r.refId || '') + ' ' + (r.details || r.desc || r.note || '') + ' ' + (r.beneficiary || '') + ' ' + (r.txNumber || '')).toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    }).sort(entryNewer);
+    var cnt = document.getElementById('hist-count'); if (cnt) cnt.textContent = rows.length + (rows.length === 1 ? ' entry' : ' entries');
+    if (!rows.length) return histCount() ? empty('Nothing matches', 'Try a different search, day or filter.') : empty('No entries yet', 'Tap the green button to record your first sale.');
+    return groupedList(rows);
+  };
+  function histCount() { return S.sales.length + S.agents.length + S.referrals.length + S.expenses.length; }
+  function entryRow(e) {
+    return e.t === 'agent' ? agentRow(e.rec) : e.t === 'referral' ? refRow(e.rec) : e.t === 'expense' ? expenseRow(e.rec) : saleRow(e.rec);
+  }
+  function groupedList(rows) {
+    var shown = rows.slice(0, UI.limit), h = '', lastM = '', lastD = '', dayN = {};
+    rows.forEach(function (e) { dayN[e.date] = (dayN[e.date] || 0) + 1; });
+    var monthStats = {}; R.months.forEach(function (m) { monthStats[m.month] = m; });
     var dayStats = {}; R.daily.forEach(function (d) { dayStats[d.date] = d; });
-    shown.forEach(function (r) {
-      var m = (r.date || '').slice(0, 7);
+    shown.forEach(function (e) {
+      var m = (e.date || '').slice(0, 7);
       if (m !== lastM) {
         var ms = monthStats[m];
-        h += '<div class="month-head"><h2>' + esc(monthName(m) || 'No date') + '</h2><span class="meta">' + (ms ? ms.count + (ms.count === 1 ? ' sale' : ' sales') + ', received ' + money(ms.received) : '') + '</span></div>';
+        h += '<div class="month-head"><h2>' + esc(monthName(m) || 'No Date') + '</h2><span class="meta">' + (ms ? ms.count + (ms.count === 1 ? ' sale' : ' sales') + ', paid ' + money(ms.paid) : '') + '</span></div>';
         lastM = m; lastD = '';
       }
-      if (r.date !== lastD) {
-        var ds = dayStats[r.date];
-        h += '<div class="day-head"><span>' + esc(r.date ? dayHead(r.date) : 'No date') + '</span><span class="meta">' + (ds ? ds.count + (ds.count === 1 ? ' sale, ' : ' sales, ') + money(ds.received) : '') + '</span></div>';
-        lastD = r.date;
+      if (e.date !== lastD) {
+        var ds = dayStats[e.date];
+        h += '<div class="day-head"><span>' + esc(e.date ? dayHead(e.date) : 'No Date') + '</span><span class="meta">' + dayN[e.date] + (dayN[e.date] === 1 ? ' entry' : ' entries') + (ds ? ', money in ' + money(ds.received) : '') + '</span></div>';
+        lastD = e.date;
       }
-      h += rowFn(r);
+      h += entryRow(e);
     });
     if (rows.length > shown.length) h += '<button class="more-btn" data-act="showMore">Show more (' + (rows.length - shown.length) + ' older)</button>';
     return h;
   }
   function saleRow(r) {
-    var what = r.details || (r.kind === 'WE' ? (r.exType || 'Wallet exchange') : 'Data / deposit');
+    var what = r.isPayment ? 'Payment Received' : (r.details || (r.kind === 'WE' ? (r.exType || 'Wallet Exchange') : 'Data / Deposit'));
     var late = r.daysOverdue ? ', ' + r.daysOverdue + ' days' : '';
     var delayed = r.daysDelayed ? ', paid ' + r.daysDelayed + ' days late' : '';
+    var amounts = r.isPayment ? 'Paid ' + money(num(r.received)) : 'Billed ' + money(r.billed) + ', paid ' + money(num(r.received));
+    if (num(r.tip)) amounts += ', tip ' + money(num(r.tip));
     return '<button class="row" data-act="editSale" data-id="' + esc(r.id) + '">' +
-      '<div class="top"><div><div class="name">' + esc(r.name || 'No name') + '</div><div class="detail">' + esc(what) + ', ' + esc(r.refId) + '</div></div>' + pill(r.status, STATUS_CLASS[r.status]) + '</div>' +
-      '<div class="bottom"><span class="c-muted num">' + (r.billedSet && num(r.billed) === 0 ? 'Paid ' + money(num(r.received)) : 'Billed ' + money(r.billed) + ', paid ' + money(num(r.received))) + esc(late) + esc(delayed) + '</span>' +
-      (r.billedSet ? balanceText(r.balance) : '') + '</div></button>';
+      '<div class="top"><div><div class="name">' + esc(r.name || 'No name') + '</div><div class="detail">' + esc(what) + (r.time ? ' · ' + esc(r.time) : '') + ' · ' + esc(r.refId) + (r.channel ? ' · ' + esc(r.channel) : '') + '</div></div>' + pill(r.status, STATUS_CLASS[r.status]) + '</div>' +
+      '<div class="bottom"><span class="c-muted num">' + esc(amounts) + esc(late) + esc(delayed) + '</span>' +
+      (r.billedSet ? balanceText(r.balance) : '') + '</div>' + (r.payMode === 'credit' && r.remaining > 0 ? '<div class="detail" style="margin-top:4px">Sold on credit</div>' : '') + '</button>';
+  }
+  function refRow(r) {
+    return '<button class="row" data-act="editRef" data-id="' + esc(r.id) + '"><div class="top"><div><div class="name">' + esc(r.agent || 'No agent') + '</div><div class="detail">Referral Sale' + (r.time ? ' · ' + esc(r.time) : '') + ' · ' + esc(r.service || '') + ' · ' + esc(r.refId) + '</div></div><span class="amount">' + money(num(r.amount)) + '</span></div>' +
+      '<div class="bottom"><span class="c-muted num">Commission ' + money(r.commission) + ', agent\'s share ' + money(r.agentCut) + '</span><span class="amount c-credit">' + money(r.net) + '</span></div></button>';
+  }
+  function expenseRow(r) {
+    return '<button class="row" data-act="editExpense" data-id="' + esc(r.id) + '"><div class="top"><div><div class="name">' + esc(r.category || 'Money Out') + '</div><div class="detail">' + esc(r.note || '') + (r.time ? ' · ' + esc(r.time) : '') + ' · ' + esc(r.refId) + (r.from ? ' · from ' + esc(r.from) : '') + '</div></div><span class="amount c-late">' + money(num(r.amount)) + '</span></div></button>';
   }
 
   /* ----- Customers ----- */
   VIEWS.customers = function () {
     var t = R.totals;
     return '<input class="search" id="q-cust" type="search" placeholder="Search name or phone" aria-label="Search customers" value="' + esc(UI.custQuery) + '">' +
-      '<div class="chips">' + [['all', 'All'], ['owing', 'To collect'], ['credit', 'Paid in advance'], ['Regular', 'Regular'], ['Irregular', 'Irregular'], ['bad', 'Bad or no credit']].map(function (c) {
+      '<div class="chips">' + [['all', 'All'], ['owing', 'To Collect'], ['credit', 'Paid in Advance'], ['Regular', 'Regular'], ['Irregular', 'Irregular'], ['bad', 'Bad or No Credit']].map(function (c) {
         return '<button data-act="custFilter" data-v="' + c[0] + '" class="' + (UI.custFilter === c[0] ? 'on' : '') + '">' + c[1] + '</button>';
       }).join('') + '</div>' +
       '<p class="hint">' + R.customers.length + ' customers. To collect: ' + money(t.owed) + '. Paid in advance: ' + money(t.credit) + '.</p><div id="list"></div>';
@@ -408,32 +628,32 @@
     });
     if (!rows.length) return empty(R.customers.length ? 'No matching customers' : 'No customers yet', R.customers.length ? 'Try a different search or filter.' : 'Customers appear here automatically when you add sales.');
     return rows.map(function (c) {
-      return '<button class="row" data-act="openCustomer" data-key="' + esc(c.key) + '"><div class="top"><div><div class="name">' + esc(c.name || 'No name') + '</div><div class="detail">' + esc(c.phone || 'No phone') + '</div></div>' + balanceText(c.balance) + '</div>' +
+      return '<button class="row" data-act="openCustomer" data-key="' + esc(c.key) + '"><div class="top"><div><div class="name">' + esc(c.name || 'No name') + '</div><div class="detail">' + esc(phoneLine(c.phone)) + '</div></div>' + balanceText(c.balance) + '</div>' +
         '<div class="bottom"><span class="c-muted">' + c.txns + ' sale' + (c.txns === 1 ? '' : 's') + ', last ' + esc(shortDate(c.last)) + (c.daysOverdue ? ', oldest unpaid ' + c.daysOverdue + ' days' : '') + '</span>' + pill(c.type, TYPE_CLASS[c.type]) + '</div></button>';
     }).join('');
   };
   VIEWS.customer = function (v) {
     var c = findCustomer(v.key);
     if (!c) return empty('Customer not found', 'They may have been removed.');
-    var h = '<div class="detail-hero"><div class="who">' + esc(c.name || 'No name') + '</div><div class="sub">' + esc(c.phone || 'No phone') + ' ' + pill(c.type, TYPE_CLASS[c.type]) + '</div>' +
+    var h = '<div class="detail-hero"><div class="who">' + esc(c.name || 'No name') + '</div><div class="sub">' + esc(phoneLine(c.phone)) + ' ' + pill(c.type, TYPE_CLASS[c.type]) + '</div>' +
       '<div>' + balanceText(c.balance, true) + '</div>' +
       '<div class="stats">' +
-      '<div><span>Total billed</span><b>' + money(c.billed) + '</b></div><div><span>Total received</span><b>' + money(c.received) + '</b></div>' +
-      '<div><span>Written off</span><b>' + money(c.writtenOff) + '</b></div><div><span>Sales</span><b>' + c.txns + '</b></div>' +
-      '<div><span>First sale</span><b>' + esc(shortDate(c.first)) + '</b></div><div><span>Last sale</span><b>' + esc(shortDate(c.last)) + '</b></div>' +
-      '<div><span>Sales per month</span><b>' + c.frequency.toFixed(1) + '</b></div><div><span>Risk</span><b>' + esc((riskFor(c.key) || {}).level || 'Low') + '</b></div>' +
-      (c.oldestUnpaid ? '<div><span>Oldest unpaid</span><b>' + esc(shortDate(c.oldestUnpaid)) + '</b></div><div><span>Days overdue</span><b>' + c.daysOverdue + '</b></div>' : '') +
-      '</div><div class="actions"><button class="btn kiosk" data-act="newPaymentFor" data-key="' + esc(c.key) + '">Customer paid</button>' +
-      '<button class="btn primary" data-act="shareFor" data-type="Customer" data-key="' + esc(c.key) + '">Share statement</button></div></div>';
+      '<div><span>Total Billed</span><b>' + money(c.billed) + '</b></div><div><span>Total Paid</span><b>' + money(c.received) + '</b></div>' +
+      '<div><span>Tips</span><b>' + money(c.tips) + '</b></div><div><span>Written Off</span><b>' + money(c.writtenOff) + '</b></div><div><span>Sales</span><b>' + c.txns + '</b></div><div><span>Sales per Month</span><b>' + c.frequency.toFixed(1) + '</b></div>' +
+      '<div><span>First Sale</span><b>' + esc(shortDate(c.first)) + '</b></div><div><span>Last Sale</span><b>' + esc(shortDate(c.last)) + '</b></div>' +
+      '<div><span>Risk</span><b>' + esc((riskFor(c.key) || {}).level || 'Low') + '</b></div>' +
+      (c.oldestUnpaid ? '<div><span>Oldest Unpaid</span><b>' + esc(shortDate(c.oldestUnpaid)) + '</b></div><div><span>Days Overdue</span><b>' + c.daysOverdue + '</b></div>' : '') +
+      '</div><div class="actions"><button class="btn kiosk" data-act="newPaymentFor" data-key="' + esc(c.key) + '">Customer Paid</button>' +
+      '<button class="btn primary" data-act="shareFor" data-type="Customer" data-key="' + esc(c.key) + '">Send Reminder</button></div></div>';
     h += riskBlock(riskFor(c.key));
-    h += '<div class="section-title">Their sales, newest first</div>';
+    h += '<div class="section-title">Their Sales, Newest First</div>';
     h += c.rows.slice().sort(byNewest).map(saleRow).join('');
     return h;
   };
 
   /* ----- Agents ----- */
   VIEWS.agents = function () {
-    return '<input class="search" id="q-agents" type="search" placeholder="Search agent, number or ref" aria-label="Search agents" value="' + esc(UI.agentQuery) + '"><div id="list"></div>';
+    return '<input class="search" id="q-agents" type="search" placeholder="Search agent, number or reference" aria-label="Search agents" value="' + esc(UI.agentQuery) + '"><button class="btn block" data-act="openAgentBatch" style="margin-bottom:10px">Several Entries at Once</button><div id="list"></div>';
   };
   LISTS.agents = function () {
     var q = UI.agentQuery.trim().toLowerCase(), h = '';
@@ -442,7 +662,7 @@
     if (bal.length) {
       h += '<div class="section-title">Balances</div>';
       h += bal.map(function (a) {
-        return '<button class="row" data-act="openAgent" data-key="' + esc(a.key) + '"><div class="top"><div><div class="name">' + esc(a.name) + '</div><div class="detail">' + esc(a.phone || 'No number') + ', ' + a.entries + ' entries</div></div>' + agentNetText(a.net) + '</div>' +
+        return '<button class="row" data-act="openAgent" data-key="' + esc(a.key) + '"><div class="top"><div><div class="name">' + esc(a.name) + '</div><div class="detail">' + esc(phoneLine(a.phone)) + ', ' + a.entries + ' entries</div></div>' + agentNetText(a.net) + '</div>' +
           (a.type ? '<div class="bottom"><span></span>' + pill(a.type, /master/i.test(a.type) ? 'p-master' : 'p-irregular') + '</div>' : '') + '</button>';
       }).join('');
     }
@@ -457,66 +677,139 @@
     var shown = rows.slice(0, UI.limit), h = '', lastM = '', lastD = '';
     shown.forEach(function (r) {
       var m = (r.date || '').slice(0, 7);
-      if (m !== lastM) { h += '<div class="month-head"><h2>' + esc(monthName(m) || 'No date') + '</h2><span class="meta"></span></div>'; lastM = m; lastD = ''; }
+      if (m !== lastM) { h += '<div class="month-head"><h2>' + esc(monthName(m) || 'No Date') + '</h2><span class="meta"></span></div>'; lastM = m; lastD = ''; }
       if (r.date !== lastD) { h += '<div class="day-head"><span>' + esc(r.date ? dayHead(r.date) : 'No date') + '</span></div>'; lastD = r.date; }
       h += agentRow(r);
     });
     if (rows.length > shown.length) h += '<button class="more-btn" data-act="showMore">Show more (' + (rows.length - shown.length) + ' older)</button>';
     return h;
   }
-  function gaveGot(r) {
+  function paidRecv(r) {
     var p = [];
-    if (num(r.toAgent)) p.push('You gave ' + money(num(r.toAgent)));
-    if (num(r.fromAgent)) p.push('You got ' + money(num(r.fromAgent)));
-    return p.join(', ') || 'No amounts';
+    if (num(r.toAgent)) p.push('Paid to Agent ' + money(num(r.toAgent)));
+    if (num(r.fromAgent)) p.push('Received from Agent ' + money(num(r.fromAgent)));
+    return p.join(' · ') || 'No amounts';
   }
   function agentRow(r) {
     var effect = '';
     return '<button class="row" data-act="editAgent" data-id="' + esc(r.id) + '"><div class="top"><div><div class="name">' + esc(r.name || 'No name') + '</div>' +
-      '<div class="detail">' + esc(r.desc || r.txType || 'Entry') + (r.txNumber ? ', received on ' + esc(C.gmNormalize(r.txNumber) || r.txNumber) : '') + ', ' + esc(r.refId) + '</div></div>' + effect + '</div>' +
-      '<div class="bottom"><span class="num">' + esc(gaveGot(r)) + '</span></div></button>';
+      '<div class="detail">' + esc(r.desc || r.txType || 'Entry') + (r.time ? ' · ' + esc(r.time) : '') + (r.txNumber ? ' · Received on ' + esc(phoneLine(r.txNumber)) : '') + ' · ' + esc(r.refId) + '</div></div>' + effect + '</div>' +
+      '<div class="bottom"><span class="num">' + esc(paidRecv(r)) + '</span></div></button>';
   }
   VIEWS.agent = function (v) {
     var a = findAgent(v.key);
     if (!a) return empty('Agent not found', 'They may have been removed.');
     var rows = R.agents.rows.filter(function (r) { return C.agentKey(r.name) === a.key; }).sort(byNewest);
-    return '<div class="detail-hero"><div class="who">' + esc(a.name) + '</div><div class="sub">' + esc(a.phone || 'No number') + ' ' + pill(a.type, /master/i.test(a.type) ? 'p-master' : 'p-irregular') + '</div>' +
-      '<div>' + agentNetText(a.net, true) + '</div><div class="stats"><div><span>Entries</span><b>' + a.entries + '</b></div><div><span>Last entry</span><b>' + esc(shortDate(a.last)) + '</b></div>' +
-      '<div><span>Written off</span><b>' + money(a.writtenOff) + '</b></div></div>' +
-      '<div class="actions"><button class="btn primary" data-act="shareFor" data-type="Agent" data-key="' + esc(a.key) + '">Share statement</button></div></div>' +
-      '<p class="hint">"You gave" is money or float you sent to them. "You got" is money they sent to you. "To collect" means they must pay you; "To pay" means you must pay them.</p>' +
+    return '<div class="detail-hero"><div class="who">' + esc(a.name) + '</div><div class="sub">' + esc(phoneLine(a.phone)) + ' ' + pill(a.type, /master/i.test(a.type) ? 'p-master' : 'p-irregular') + '</div>' +
+      '<div>' + agentNetText(a.net, true) + '</div><div class="stats"><div><span>Entries</span><b>' + a.entries + '</b></div><div><span>Last Entry</span><b>' + esc(shortDate(a.last)) + '</b></div>' +
+      '<div><span>Written Off</span><b>' + money(a.writtenOff) + '</b></div></div>' +
+      '<div class="actions"><button class="btn primary" data-act="shareFor" data-type="Agent" data-key="' + esc(a.key) + '">Send Reminder</button></div></div>' +
+      '<p class="hint">"Paid to Agent" is money or float you sent to them. "Received from Agent" is money they sent to you. "To Collect" means they must pay you; "To Pay" means you must pay them.</p>' +
       rows.map(agentRow).join('');
   };
 
-  /* ----- More ----- */
-  VIEWS.more = function () {
-    var ss = window.Sync ? Sync.status() : { configured: false };
-    var items = [
-      ['sync', ss.managed ? 'Your account' : 'Online sync', ss.signedIn ? ss.label : ss.configured ? 'Sign in to sync' : 'Keep records online', 'account', 'blue'],
-      ['risk', 'Risk check', 'Who might not pay, credit limits', 'risk', 'red'],
-      ['share', 'Share a statement', 'Balance reminders on WhatsApp', 'chat', 'green'],
-      ['daily', 'Daily cash check', 'Catch missing money', 'cash', 'green'],
-      ['comm', 'Commissions', 'Wallets and EVC', 'comm', 'green'],
-      ['ref', 'Referral agents', 'Sales for other agents', 'customers', 'blue'],
-      ['recon', 'Monthly reconciliation', 'Match your statements', 'recon', 'blue'],
-      ['losses', 'Losses and errors', 'Write-offs and mistakes', 'loss', 'red'],
-      ['capital', 'Capital portfolio', 'Available and working capital', 'capital', 'blue'],
-      ['backup', 'Backup and restore', 'Save or bring back records', 'backup', 'blue'],
-      ['settings', 'Settings', 'Channels, wallets, lists', 'settings', 'blue'],
-      ['help', 'How it works', 'Balances, credit, statuses', 'help', 'blue']
-    ];
-    if (ss.managed) items.push(['privacy', 'Privacy policy', 'How your records are protected', 'privacy', 'blue']);
-    var h = '<div class="tiles">' + items.map(function (i) {
-      return '<button class="tile ' + i[4] + '" data-act="' + (i[0] === 'privacy' ? 'openPrivacy' : 'go') + '" data-v="' + i[0] + '"><span class="ic">' + icon(i[3]) + '</span><b>' + i[1] + '</b><small>' + esc(i[2]) + '</small></button>';
-    }).join('') + '</div>';
-    if (deferredInstall) h += '<button class="btn kiosk block" data-act="install">Install this app on your phone</button>';
+  /* ----- Settings hub ----- */
+  function srow(act, v, ic, title, sub, color) {
+    return '<button class="srow" data-act="' + act + '" data-v="' + v + '"><span class="ic ' + (color || 'blue') + '">' + icon(ic) + '</span><span class="tx"><b>' + esc(title) + '</b><small>' + esc(sub) + '</small></span><span class="chev">›</span></button>';
+  }
+  VIEWS.settings = function () {
+    var ss = window.Sync ? Sync.status() : { configured: false }, p = S.settings.profile, c = COUNTRIES.get(p.country) || {};
+    var sec = Security.cfg(), h = '';
+    h += '<div class="profile-card"><div class="avatar">' + esc((p.name || '?').trim().charAt(0).toUpperCase()) + '</div><div class="pc-tx"><b>' + esc(p.name || 'Add your name') + '</b>' +
+      '<small>' + esc((c.name || '') + (ss.email ? ' · ' + ss.email : '')) + '</small></div><button class="btn" data-act="go" data-v="profile">Edit</button></div>';
+    h += '<div class="section-title">Account and Security</div><div class="slist">' +
+      srow('go', 'sync', 'account', 'Your Account', ss.signedIn ? ss.label : ss.configured ? 'Sign in to keep records online' : 'Keep your records online', 'blue') +
+      srow('go', 'security', 'lock', 'Security', Security.enabled() ? 'PIN on' + (Security.bioEnabled() ? ', fingerprint on' : '') : 'Protect your records with a PIN', 'red') + '</div>';
+    h += '<div class="section-title">Look and Money</div><div class="slist">' +
+      srow('go', 'look', 'look', 'Country, Currency and Theme', (c.name || '') + ' · ' + S.settings.currency.symbol + ' · ' + (THEMES.list[S.settings.theme] || THEMES.list.classic).name, 'green') +
+      srow('go', 'rules', 'rules', 'Money Rules', 'Tips and how you record payments', 'green') +
+      srow('go', 'choices', 'list', 'Your Choices', 'Payment channels, wallets, EVC operators and other lists', 'green') + '</div>';
+    h += '<div class="section-title">Your Data</div><div class="slist">' +
+      srow('go', 'backup', 'backup', 'Backup and Restore', S.meta.lastBackup ? 'Last backup ' + shortDate(S.meta.lastBackup) : 'Save a copy of your records', 'blue') +
+      srow('openPrivacy', 'privacy', 'privacy', 'Privacy Policy', 'How your records are protected', 'blue') +
+      srow('go', 'help', 'help', 'How It Works', 'Balances, credit, tips, statuses', 'blue') + '</div>';
+    if (Security.enabled()) h += '<button class="btn block" data-act="lockNow" style="margin-top:14px">Lock the App Now</button>';
+    if (deferredInstall) h += '<button class="btn kiosk block" data-act="install" style="margin-top:10px">Install This App on Your Phone</button>';
+    h += '<p class="hint" style="text-align:center;margin-top:16px">' + esc(APP_NAME) + ' · Your records are private to you.</p>';
     return h;
   };
+  VIEWS.profile = function () {
+    var p = S.settings.profile;
+    return '<div class="card"><div class="field"><label for="pf-name">Your Name or Business Name</label><input id="pf-name" value="' + esc(p.name) + '"></div>' +
+      '<div class="field"><label for="pf-country">Country</label><select id="pf-country">' + countryOptions(p.country) + '</select></div>' +
+      '<label class="check" style="margin-bottom:12px"><input type="checkbox" id="pf-apply"><span>Also use this country\'s currency and colours</span></label>' +
+      '<button class="btn primary block" data-act="saveProfile">Save</button></div>' +
+      '<p class="hint">Your country decides how phone numbers are checked. Contacts in other countries can still be recorded: choose their country next to the phone box.</p>';
+  };
+  VIEWS.look = function () {
+    var p = S.settings.profile, cur = S.settings.currency;
+    var sw = THEMES.ids.map(function (id) {
+      var t = THEMES.list[id];
+      return '<button class="theme' + (S.settings.theme === id ? ' on' : '') + '" data-act="setTheme" data-v="' + id + '"><span class="sw" style="background:linear-gradient(' + t.s1 + ' 0 22%,' + t.brand + ' 22% 78%,' + t.s3 + ' 78%)"></span><b>' + esc(t.name) + '</b></button>';
+    }).join('');
+    return '<div class="section-title" style="margin-top:0">Colour Theme</div><div class="themes">' + sw + '</div>' +
+      '<p class="hint">Classic suits everyone. The country themes use that country\'s flag colours. Red always means money to collect, and green always means money received.</p>' +
+      '<div class="section-title">Country</div><div class="card"><div class="field"><label for="lk-country">Country</label><select id="lk-country">' + countryOptions(p.country) + '</select></div>' +
+      '<button class="btn block" data-act="applyCountry">Use This Country\'s Currency and Colours</button></div>' +
+      '<div class="section-title">Currency</div><div class="card"><div class="two"><div class="field"><label for="lk-sym">Symbol</label><input id="lk-sym" value="' + esc(cur.symbol) + '"></div>' +
+      '<div class="field"><label for="lk-code">Code</label><input id="lk-code" value="' + esc(cur.code) + '"></div></div>' +
+      '<p class="hint" style="margin:0 0 10px">Example: ' + esc(money(12345.5)) + '</p><button class="btn primary block" data-act="saveCurrency">Save Currency</button></div>';
+  };
+  function optCard(act, cur, id, title, text) {
+    return '<button class="opt' + (cur === id ? ' on' : '') + '" data-act="' + act + '" data-v="' + id + '"><span class="radio"></span><span class="tx"><b>' + esc(title) + '</b><small>' + esc(text) + '</small></span></button>';
+  }
+  VIEWS.rules = function () {
+    var tm = S.settings.tipMode, pd = S.settings.payDefault || '';
+    return '<div class="section-title" style="margin-top:0">How Do You Handle Tips?</div>' +
+      optCard('setTip', tm, 'extra', 'Extra money on top', 'A tip is on top of the bill. It counts as extra income and is not used to pay the bill. Example: bill 1,000, customer pays 1,000 and gives a tip of 50.') +
+      optCard('setTip', tm, 'included', 'Included in the amount received', 'You type the total the customer paid, tip included. The app takes the tip off before paying the bill. Example: customer pays 1,050 with a tip of 50, so the bill gets 1,000.') +
+      optCard('setTip', tm, 'passon', 'Not mine, I hand it over', 'Tips belong to staff or someone else. They count as money received, but show as Tips to Hand Over and not as your income.') +
+      '<p class="hint">Tips always show on your home screen and are never lost, whichever way you choose.</p>' +
+      '<div class="section-title">How Do You Record Sales?</div>' +
+      optCard('setPayDefault', pd, '', 'Ask me every time', 'Recommended. You choose Paid in Full, Part Paid or On Credit for each sale, so it is never recorded by mistake.') +
+      optCard('setPayDefault', pd, 'full', 'Mostly paid on the spot', 'Paid in Full is pre-selected on new sales. You still see it clearly and can change it.') +
+      optCard('setPayDefault', pd, 'credit', 'Mostly on credit (debt recording)', 'On Credit is pre-selected on new sales. Use this if you mainly record who owes you.');
+  };
+  var LOCK_OPTS = [['now', 'Right away'], ['1', 'After 1 minute'], ['5', 'After 5 minutes'], ['15', 'After 15 minutes'], ['never', 'Only when I lock it']];
+  VIEWS.security = function () {
+    var c = Security.cfg(), on = Security.enabled(), h = '';
+    h += '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><b>App Lock</b>' + pill(on ? 'On' : 'Off', on ? 'p-overpaid' : 'p-outstanding') + '</div>' +
+      '<p class="hint" style="margin:6px 0 10px">' + (on ? 'The app asks for your PIN' + (Security.bioEnabled() ? ' or fingerprint' : '') + ' every time it opens or comes back from another app.' : 'Without a lock, anyone who picks up your phone can open your records.') + '</p>' +
+      '<div class="actions" style="margin:0">' + (on ? '<button class="btn" data-act="pinChange">Change PIN</button>' : '<button class="btn primary" data-act="pinChange">Set a PIN</button>') +
+      (on && !signedIn() ? '<button class="btn danger" data-act="pinOff">Turn Off</button>' : '') + '</div>' + (on && signedIn() ? '<p class="hint" style="margin:10px 0 0">The PIN is required while you are signed in to an account.</p>' : '') + '</div>';
+    if (on) {
+      h += '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><b>Fingerprint or Face</b>' + pill(Security.bioEnabled() ? 'On' : 'Off', Security.bioEnabled() ? 'p-overpaid' : 'p-paid') + '</div>' +
+        '<p class="hint" style="margin:6px 0 10px">' + (UI.bioOK ? 'Open the app with your fingerprint or face. Your PIN always works as a back-up.' : 'This phone or browser does not offer fingerprint unlock for the app.') + '</p>' +
+        (UI.bioOK ? '<button class="btn ' + (Security.bioEnabled() ? 'danger' : 'primary') + '" data-act="' + (Security.bioEnabled() ? 'bioOff' : 'bioOn') + '">' + (Security.bioEnabled() ? 'Turn Off Fingerprint' : 'Turn On Fingerprint') + '</button>' : '') + '</div>';
+      h += '<div class="card"><b>Lock Automatically</b><div class="field" style="margin-top:8px"><select id="sec-lock">' + LOCK_OPTS.map(function (o) { return '<option value="' + o[0] + '"' + ((c.lockAfter || 'now') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
+        '<p class="hint" style="margin:0">How long the app can be out of sight before it asks for your PIN again.</p></div>';
+    }
+    h += '<div class="card"><b>Hide Amounts</b><p class="hint" style="margin:6px 0 10px">Blur money amounts on screen so people nearby cannot read them. You can also tap the eye at the top of any screen.</p>' +
+      '<button class="btn" data-act="toggleHide">' + (S.meta.hideAmounts ? 'Show Amounts' : 'Hide Amounts') + '</button></div>';
+    if (signedIn()) {
+      h += '<div class="card"><b>Ask for Your Password Again</b><div class="field" style="margin-top:8px"><select id="sec-exp">' + [7, 14, 30, 90].map(function (d) { return '<option value="' + d + '"' + (Security.expireDays() === d ? ' selected' : '') + '>Every ' + d + ' days</option>'; }).join('') + '</select></div>' +
+        '<p class="hint" style="margin:0">After this many days the app asks for your email password again, even with the PIN.</p></div>';
+      h += '<div class="section-title">Your Devices</div><div id="devices">' + devicesHTML() + '</div>' +
+        '<p class="hint">Every phone that signs in to your account is listed here. If you see one you do not know, remove it and change your password.</p>' +
+        '<button class="btn block" data-act="syncReset" style="margin-bottom:8px">Send Me a Password Reset Email</button>';
+    }
+    h += '<div class="card help"><h3 style="margin-top:0">What Protects Your Records</h3><p>Your records are saved on this phone and, if you have an account, in your private online account that only you can open. The PIN and fingerprint stop other people from opening the app on your phone.</p>' +
+      '<p>Note: a text-message code for every new phone needs Firebase\'s paid plan. Until then, new phones are protected by your password, and you see every device here.</p></div>';
+    return h;
+  };
+  function devicesHTML() {
+    var list = window.Sync && Sync.devices ? Sync.devices() : [];
+    if (!list.length) return '<p class="hint">No devices to show yet.</p>';
+    return list.map(function (d) {
+      return '<div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div><b>' + esc(d.name || 'Phone') + '</b>' + (d.me ? ' ' + pill('This Phone', 'p-overpaid') : '') +
+        '<div class="hint" style="margin:2px 0 0">Last used ' + esc(stamp(d.last)) + '</div></div>' + (d.me ? '' : '<button class="btn danger" data-act="removeDevice" data-id="' + esc(d.id) + '">Remove</button>') + '</div>';
+    }).join('');
+  }
 
   /* ----- Share ----- */
   VIEWS.share = function () {
     var isC = UI.shareType === 'Customer';
-    var opts = isC ? R.customers.map(function (c) { return [c.key, (c.name || 'No name') + (c.phone ? ' (' + c.phone + ')' : '') + (c.owed > 0 ? ', to collect ' + money(c.owed) : c.credit > 0 ? ', paid in advance ' + money(c.credit) : '')]; })
+    var opts = isC ? R.customers.map(function (c) { return [c.key, (c.name || 'No name') + (c.phone ? ' (' + C.phoneInfo(c.phone).display + ')' : '') + (c.owed > 0 ? ', to collect ' + money(c.owed) : c.credit > 0 ? ', paid in advance ' + money(c.credit) : '')]; })
       : R.agents.balances.map(function (a) { return [a.key, a.name + (a.net > 0 ? ', to collect ' + money(a.net) : a.net < 0 ? ', to pay ' + money(-a.net) : ', settled')]; });
     if (UI.shareKey && !opts.some(function (o) { return o[0] === UI.shareKey; })) UI.shareKey = '';
     if (!UI.shareKey && opts.length) UI.shareKey = opts[0][0];
@@ -525,23 +818,20 @@
     return seg('shareType', UI.shareType, [['Customer', 'Customer'], ['Agent', 'Agent']]) +
       '<div class="field"><label for="share-who">' + (isC ? 'Customer' : 'Agent') + '</label><select id="share-who">' +
       (opts.length ? opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (o[0] === UI.shareKey ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') : '<option>No one yet</option>') + '</select></div>' +
-      '<div class="field"><label for="msg">Message. Change any word before sending.</label><textarea id="msg" class="message">' + esc(UI.shareText) + '</textarea></div>' +
+      '<div class="field"><label for="msg">Message: Change Any Word Before Sending</label><textarea id="msg" class="message">' + esc(UI.shareText) + '</textarea></div>' +
       '<div class="actions">' +
       (phone ? '<button class="btn kiosk" data-act="shareWa">Send on WhatsApp</button>' : '') +
       '<button class="btn primary" data-act="shareShare">Share</button><button class="btn" data-act="shareCopy">Copy</button>' +
-      '<button class="btn" data-act="shareRegen">Start over</button></div>' +
-      (phone ? '<p class="hint">WhatsApp opens a chat with ' + esc(phone) + ' with your message ready. Nothing is sent until you press send there.</p>' : '<p class="hint">No phone number saved for them, so use Share or Copy.</p>');
+      '<button class="btn" data-act="shareRegen">Start Over</button></div>' +
+      (phone ? '<p class="hint">WhatsApp opens a chat with +' + esc(phone) + ' with your message ready. Nothing is sent until you press send there.</p>' : '<p class="hint">No phone number saved for them, so use Share or Copy.</p>');
   };
   function sharePhone() {
     var raw = '';
     if (UI.shareType === 'Customer') { var c = findCustomer(UI.shareKey); raw = c ? c.phone : ''; }
     else { var a = findAgent(UI.shareKey); raw = a ? a.phone : ''; }
-    var d = C.gmNormalize(raw);
-    if (!d) return '';
-    var cc = String(S.settings.countryCode || '').replace(/\D/g, '');
-    if (cc && d.indexOf(cc) !== 0 && d.length <= 9) d = cc + d;
-    return d;
+    return C.phoneInfo(raw).wa || '';
   }
+  function signOff() { var n = S.settings.profile.name; return n ? '\n\n' + n : ''; }
   function buildMessage() {
     if (UI.shareType === 'Customer') { var c = findCustomer(UI.shareKey); return c ? customerMessage(c) : ''; }
     var a = findAgent(UI.shareKey); return a ? agentMessage(a) : '';
@@ -549,62 +839,95 @@
   function customerMessage(c) {
     var name = c.name || 'there', date = readable(R.today);
     if (c.balance <= 0) {
-      return 'Hello ' + name + ', thank you for doing business with us.\n\nAs of ' + date + ', your account is fully settled' +
-        (c.credit > 0 ? '. You have ' + money(c.credit) + ' with us that you paid in advance. It will be used on your next purchase.' : '.') + '\n\nThank you!';
+      return 'Hello ' + name + ', thank you for doing business with us.\n\nAs of ' + date + ', you have nothing to pay' +
+        (c.credit > 0 ? '. You have ' + money(c.credit) + ' with us that you paid in advance. It will be used on your next purchase.' : '.') + '\n\nThank you!' + signOff();
     }
     var items = c.rows.filter(function (r) { return r.remaining > 0; }).sort(byNewest);
     var sum = items.reduce(function (a, r) { return a + r.remaining; }, 0);
-    var lines = items.map(function (r, i) { return (i + 1) + '. ' + shortDate(r.date) + ': ' + (r.details || (r.kind === 'WE' ? 'Wallet exchange' : 'Purchase')) + ', ' + money(r.remaining) + ' not yet paid'; });
+    var lines = items.map(function (r, i) { return (i + 1) + '. ' + shortDate(r.date) + ': ' + (r.details || (r.kind === 'WE' ? 'Wallet Exchange' : 'Purchase')) + ', ' + money(r.remaining) + ' not yet paid'; });
     return 'Hello ' + name + ', this is a reminder of your outstanding balance with us as of ' + date + '.\n\nUnpaid items:\n' + lines.join('\n') +
       '\n\nTotal you need to pay: ' + money(c.balance) +
       (sum - c.balance > 0.005 ? '\n(Your earlier overpayment of ' + money(sum - c.balance) + ' has already been deducted.)' : '') +
-      '\n\nKindly settle at your earliest convenience. Thank you!';
+      '\n\nKindly pay at your earliest convenience. Thank you!' + signOff();
   }
   function agentMessage(a) {
     var rows = R.agents.rows.filter(function (r) { return C.agentKey(r.name) === a.key && r.hasNet; }).sort(byNewest);
     var shown = rows.slice(0, 25);
     var lines = shown.map(function (r, i) {
       var p = [];
-      if (num(r.toAgent)) p.push('we gave you ' + money(num(r.toAgent)));
-      if (num(r.fromAgent)) p.push('you gave us ' + money(num(r.fromAgent)));
+      if (num(r.toAgent)) p.push('we paid you ' + money(num(r.toAgent)));
+      if (num(r.fromAgent)) p.push('you paid us ' + money(num(r.fromAgent)));
       return (i + 1) + '. ' + shortDate(r.date) + ': ' + (r.desc || r.txType || 'Entry') + ', ' + (p.join(', ') || 'no amount');
     });
     var foot = a.net > 0 ? 'Balance: you need to pay us ' + money(a.net) + '.\n\nKindly pay at your earliest convenience. Thank you!'
       : a.net < 0 ? 'Balance: we will pay you ' + money(-a.net) + '.\n\nWe will pay you soon. Thank you for your patience!'
       : 'Balance: nothing to pay on either side. Thank you!';
     return 'Hello ' + a.name + ', here is a summary of your agent account as of ' + readable(R.today) + '.\n\n' +
-      (lines.length ? 'Recent entries:\n' + lines.join('\n') + (rows.length > 25 ? '\n(Showing the 25 most recent of ' + rows.length + ' entries.)' : '') + '\n\n' : '') + foot;
+      (lines.length ? 'Recent entries:\n' + lines.join('\n') + (rows.length > 25 ? '\n(Showing the 25 most recent of ' + rows.length + ' entries.)' : '') + '\n\n' : '') + foot + signOff();
   }
 
-  /* ----- Daily cash ----- */
+  /* ----- Daily cash check and monthly balance check ----- */
+  function checkBadge(c) {
+    if (c.status === 'First Record' || c.status === 'First record') return pill('First Record', 'p-paid');
+    if (c.status === 'Balanced') return pill('Balanced', 'p-overpaid');
+    if (c.status === 'Missing' || c.status === 'Extra') return pill((c.status === 'Missing' ? 'Missing ' : 'Extra ') + money(Math.abs(c.diff)), c.status === 'Missing' ? 'p-overdue' : 'p-outstanding');
+    return pill(c.status, 'p-outstanding');
+  }
+  function flowLines(f) {
+    var rows = [];
+    if (f.customers) rows.push(['+ Payments from customers', money(f.customers)]);
+    if (f.tips) rows.push(['+ Tips', money(f.tips)]);
+    if (f.agentsGot) rows.push(['+ Received from agents', money(f.agentsGot)]);
+    if (f.commissions) rows.push(['+ Commission received', money(f.commissions)]);
+    if (f.agentsPaid) rows.push(['− Paid to agents', money(f.agentsPaid)]);
+    if (f.expenses) rows.push(['− Expenses and money out', money(f.expenses)]);
+    if (f.costOut) rows.push(['− Cost of data and amounts sent out', money(f.costOut)]);
+    return rows.map(function (r) { return kv(r[0], r[1]); }).join('') || '<p class="hint" style="margin:6px 0">No money moved in this period.</p>';
+  }
   VIEWS.daily = function () {
-    var has = R.daily.some(function (d) { return d.date === R.today; });
-    var h = '<p class="hint">Type your opening balance, money paid out, and what you actually counted at closing. The app works out what you should have. A difference of zero means no money is missing.</p>' +
-      '<button class="btn kiosk block" data-act="editDaily" data-date="' + R.today + '">' + (has && R.daily.filter(function (d) { return d.date === R.today; })[0].expected !== null ? 'Update today\'s cash' : 'Record today\'s cash') + '</button><div style="height:12px"></div>';
-    var days = R.daily.slice(0, UI.limit);
-    if (!days.length) return h + empty('No days yet', 'Days appear here as you add sales.');
-    h += days.map(function (d) {
-      var v = d.variance;
-      return '<button class="row" data-act="editDaily" data-date="' + d.date + '"><div class="top"><div class="name">' + esc(dayHead(d.date)) + ', ' + parts(d.date).y + '</div>' +
-        (v === null ? '<span class="c-muted">Not checked</span>' : v === 0 ? pill('Balanced', 'p-overpaid') : pill((v > 0 ? 'Extra ' : 'Missing ') + money(Math.abs(v)), 'p-overdue')) + '</div>' +
-        '<div class="bottom"><span class="c-muted">' + d.count + (d.count === 1 ? ' sale' : ' sales') + ', received ' + money(d.received) + '</span>' + (d.expected !== null ? '<span class="num">Expected ' + money(d.expected) + '</span>' : '') + '</div></button>';
+    var h = '<p class="hint">Record what you have in every wallet, bank and your cash drawer. The app compares it with what you should have: your last balances, plus money in, minus money out. A difference of zero means no money is missing.</p>' +
+      '<button class="btn kiosk block" data-act="newCapital">Record Balances Now</button><div style="height:12px"></div>';
+    if (!R.checks.length) return h + empty('No balances yet', 'Record your balances once to begin. From the second time, the app checks that your money adds up.');
+    return h + R.checks.slice(0, UI.limit).map(function (c) {
+      return '<button class="row" data-act="openCheck" data-id="' + esc(c.id) + '"><div class="top"><div class="name">' + esc(dayHead(c.date)) + ', ' + parts(c.date).y + '</div>' + checkBadge(c) + '</div>' +
+        '<div class="bottom"><span class="c-muted num">' + (c.opening === null ? 'Counted ' + money(c.closing) : 'Should have ' + money(c.expected) + ', counted ' + money(c.closing)) + '</span></div></button>';
     }).join('');
-    if (R.daily.length > days.length) h += '<button class="more-btn" data-act="showMore">Show more</button>';
-    return h;
   };
-
-  /* ----- Reconciliation ----- */
+  VIEWS.check = function (v) {
+    var c = R.checks.filter(function (x) { return x.id === v.id; })[0];
+    if (!c) return empty('Not found', 'This record may have been removed.');
+    var snaps = S.capital.slice().sort(function (x, y) { return x.date < y.date ? -1 : x.date > y.date ? 1 : (x.seq || 0) - (y.seq || 0); });
+    var idx = snaps.map(function (s) { return s.id; }).indexOf(c.id), cur = snaps[idx], prev = idx > 0 ? snaps[idx - 1] : null;
+    var h = '<div class="detail-hero"><div class="who">' + esc(readable(c.date)) + '</div><div style="margin-top:8px">' + checkBadge(c) + '</div></div>';
+    if (c.opening !== null) {
+      h += '<div class="card"><b>How It Adds Up</b>' + kv('Balances on ' + shortDate(c.from), money(c.opening)) + flowLines(c.flows) +
+        kv('You should have', money(c.expected)) + kv('You counted', money(c.closing)) +
+        kv('Difference', '<span class="' + (c.diff === 0 ? 'c-credit' : 'c-late') + '">' + money(c.diff) + '</span>') + '</div>';
+      if (c.status === 'Missing') h += '<div class="form-error">' + money(-c.diff) + ' less than expected. Common reasons: data or airtime you bought but did not record, money you took out, a sale or payment you forgot to record, or a wrong balance.</div>';
+      if (c.status === 'Extra') h += '<div class="form-info">' + money(c.diff) + ' more than expected. Common reasons: money received that was not recorded, a payment recorded too small, or a wrong balance.</div>';
+    } else h += '<div class="form-info">This is your first record, so there is nothing to compare it with yet. It becomes the starting point for the next check.</div>';
+    h += '<div class="card"><b>Balances You Recorded</b>' + Object.keys(cur.balances || {}).filter(function (k) { return num(cur.balances[k]) || (prev && num(prev.balances[k])); }).map(function (k) {
+      var now = num(cur.balances[k]), was = prev ? num((prev.balances || {})[k]) : null;
+      return kv(k, money(now) + (was !== null && was !== now ? ' <span class="c-muted">(was ' + money(was) + ')</span>' : ''));
+    }).join('') + kv('Total', money(c.closing)) + '</div>';
+    return h + '<button class="btn block" data-act="editCapital" data-id="' + esc(c.id) + '">Change These Balances</button>';
+  };
   VIEWS.recon = function () {
-    var h = '<p class="hint">For each month, type the total your bank or mobile money statements show you received. A difference of zero means your records match. If not, something is missing from your sales.</p>';
-    if (!R.recon.length) return h + empty('No months yet', 'Months appear here as you add sales.');
-    return h + R.recon.map(function (m) {
-      var d = m.difference;
-      return '<button class="card" data-act="editRecon" data-month="' + m.month + '" style="display:block;width:100%;text-align:left">' +
-        '<div class="top" style="display:flex;justify-content:space-between;align-items:center"><b>' + esc(monthName(m.month)) + '</b>' +
-        pill(m.status === 'Yes' ? 'Reconciled' : m.status === 'No' ? 'Not reconciled' : 'Pending', m.status === 'Yes' ? 'p-overpaid' : m.status === 'No' ? 'p-overdue' : 'p-outstanding') + '</div>' +
-        kv('Sales', m.count) + kv('Billed', money(m.billed)) + kv('Received, with tips', money(m.received)) +
-        kv('Statement says', m.statement === null ? 'Not entered' : money(m.statement)) +
-        (d === null ? '' : kv('Difference', '<span class="' + (d === 0 ? 'c-credit' : 'c-late') + '">' + money(d) + '</span>')) + '</button>';
+    var h = '<p class="hint">For each month: your balances at the start, plus money in, minus money out, is what you should have at the end. This is compared with the balances you recorded. It does not need a bank statement.</p>';
+    if (!R.monthChecks.length) return h + empty('No months yet', 'Months appear here as you record sales and balances.');
+    var stats = {}; R.months.forEach(function (m) { stats[m.month] = m; });
+    return h + R.monthChecks.map(function (m) {
+      var st = stats[m.month], c = '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><b>' + esc(monthName(m.month)) + '</b>' + (m.expected !== undefined ? checkBadge(m) : pill(m.status, 'p-outstanding')) + '</div>';
+      if (st) c += kv('Sales', st.count) + kv('Billed', money(st.billed)) + kv('Paid by customers', money(st.paid)) + (st.tips ? kv(tip(R.tipMode), money(st.tips)) : '');
+      if (m.expected !== undefined) {
+        c += '<div style="height:6px"></div>' + kv('Balances on ' + shortDate(m.opening.date), money(m.opening.total)) + flowLines(m.flows) + kv('You should have', money(m.expected)) +
+          kv('You counted on ' + shortDate(m.closing.date), money(m.closing.total)) + kv('Difference', '<span class="' + (m.diff === 0 ? 'c-credit' : 'c-late') + '">' + money(m.diff) + '</span>');
+      } else {
+        var last = C.lastDay(m.month);
+        c += '<p class="hint" style="margin:8px 0">' + (m.status === 'No opening balances' ? 'Record your balances at the start of the month too, so the app can check this month.' : 'Record your balances at the end of this month to check it.') + '</p>' +
+          '<button class="btn kiosk" data-act="newCapital" data-date="' + (last > R.today ? R.today : last) + '">Record Balances</button>';
+      }
+      return c + '</div>';
     }).join('');
   };
 
@@ -630,24 +953,24 @@
 
   /* ----- Commissions ----- */
   VIEWS.comm = function () {
-    var h = seg('commTab', UI.commTab, [['wallet', 'Mobile wallets'], ['evc', 'EVC'], ['month', 'By month']]);
+    var h = seg('commTab', UI.commTab, [['wallet', 'Mobile Wallets'], ['evc', 'EVC'], ['month', 'By Month']]);
     if (UI.commTab === 'wallet') {
       var rows = R.walletComm.slice().sort(function (a, b) { return (b.month || '').localeCompare(a.month || '') || (b.seq || 0) - (a.seq || 0); });
-      h += '<p class="hint">One entry per wallet per month. Net is what you received, minus anything you shared with an agent.</p>';
+      h += '<p class="hint">One entry per wallet per month. Net is what you received, minus anything you shared with an Agent or Partner.</p>';
       h += rows.length ? rows.map(function (r) {
         return '<button class="row" data-act="editWallet" data-id="' + esc(r.id) + '"><div class="top"><div><div class="name">' + esc(r.wallet || 'No wallet') + '</div><div class="detail">' + esc(monthName(r.month)) + '</div></div><span class="amount c-credit">' + money(r.net) + '</span></div>' +
-          '<div class="bottom"><span class="c-muted num">Statement ' + money(num(r.earned)) + ', received ' + money(num(r.received)) + (num(r.shared) ? ', shared ' + money(r.shared) + (r.agentName ? ' with ' + esc(r.agentName) : '') : '') + '</span></div></button>';
+          '<div class="bottom"><span class="c-muted num">Statement ' + money(num(r.earned)) + ', received ' + money(num(r.received)) + (num(r.shared) ? ', shared with Agent or Partner ' + money(r.shared) + (r.agentName ? ' (' + esc(r.agentName) + ')' : '') : '') + '</span></div></button>';
       }).join('') : empty('No wallet commissions yet', 'Tap the yellow button to add one.');
     } else if (UI.commTab === 'evc') {
       var ev = R.evc.slice().sort(function (a, b) { return (b.month || '').localeCompare(a.month || '') || (b.seq || 0) - (a.seq || 0); });
-      h += '<p class="hint">One row per purchase. Commission is purchase times return rate. On the part sold wholesale, everything above its royalty goes to the wholesaler, so you only earn on the retail part.</p>';
+      h += '<p class="hint">One row per purchase. You earn commission on the part you sell to customers (Retail). The part you sell on to other dealers (Wholesale) is passed on to them. If you share part of your commission with a partner or line owner, enter it in the form and it is taken off for you.</p>';
       h += ev.length ? ev.map(function (r) {
         return '<button class="row" data-act="editEvc" data-id="' + esc(r.id) + '"><div class="top"><div><div class="name">' + esc(r.provider || 'EVC') + '</div><div class="detail">' + esc(monthName(r.month)) + (r.wholesaler ? ', wholesale to ' + esc(r.wholesaler) : '') + '</div></div><span class="amount c-credit">' + money(r.net) + '</span></div>' +
-          '<div class="bottom"><span class="c-muted num">Bought ' + money(num(r.purchase)) + ' (retail ' + money(r.retail) + ', wholesale ' + money(num(r.wholesale)) + '), royalty ' + money(r.royalty) + '</span></div></button>';
+          '<div class="bottom"><span class="c-muted num">Bought ' + money(num(r.purchase)) + ' (retail ' + money(r.retail) + ', wholesale ' + money(num(r.wholesale)) + '). You keep ' + money(r.net) + ', shared with partner ' + money(r.royalty) + (num(r.wholesale) ? ', passed to dealer ' + money(r.toWholesaler) : '') + '</span></div></button>';
       }).join('') : empty('No EVC entries yet', 'Tap the yellow button to add one.');
     } else {
       h += R.commMonths.length ? R.commMonths.map(function (m) {
-        return '<div class="card"><b>' + esc(monthName(m.month)) + '</b>' + kv('Mobile wallets, net', money(m.wallet)) + kv('EVC, net', money(m.evc)) + kv('Total you earned', '<span class="c-credit">' + money(m.total) + '</span>') + '</div>';
+        return '<div class="card"><b>' + esc(monthName(m.month)) + '</b>' + kv('Mobile Wallets, Net', money(m.wallet)) + kv('EVC, Net', money(m.evc)) + kv('Total You Earned', '<span class="c-credit">' + money(m.total) + '</span>') + '</div>';
       }).join('') : empty('Nothing yet', 'Monthly totals appear here once you add wallet or EVC commissions.');
     }
     return h;
@@ -655,7 +978,7 @@
 
   /* ----- Referral agents ----- */
   VIEWS.ref = function () {
-    var h = seg('refTab', UI.refTab, [['sales', 'Sales'], ['payouts', 'What to pay'], ['rates', 'Deposit rates']]);
+    var h = seg('refTab', UI.refTab, [['sales', 'Sales'], ['payouts', 'What to Pay'], ['rates', 'Deposit Rates']]);
     var RF = R.referrals;
     if (UI.refTab === 'sales') {
       h += '<p class="hint">For Data Sending and EVC, log one row per agent per day with that day\'s total. Log each Deposit on its own, because its commission depends on the amount.</p>';
@@ -673,7 +996,7 @@
     } else {
       h += '<p class="hint">Flat deposit commission by amount. A deposit gets the commission of the highest "From" amount it reaches.' +
         (S.brackets.length ? '' : ' No rates yet. Tap Add a row for each range, for example From 1, To 999, Commission 5.') + '</p><div class="card" id="brackets">' +
-        '<div class="bracket-row" style="font-size:0.8rem;font-weight:700;color:var(--ink-soft)"><span>From (D)</span><span>To (D)</span><span>Commission (D)</span><span></span></div>' +
+        '<div class="bracket-row" style="font-size:0.8rem;font-weight:700;color:var(--ink-soft)"><span>From (' + sym() + ')</span><span>To (' + sym() + ')</span><span>Commission (' + sym() + ')</span><span></span></div>' +
         S.brackets.map(bracketRow).join('') + '</div>' +
         '<div class="actions"><button class="btn" data-act="addBracket">Add a row</button><button class="btn primary" data-act="saveBrackets">Save rates</button></div>';
     }
@@ -687,20 +1010,37 @@
   /* ----- Capital ----- */
   VIEWS.capital = function () {
     var cap = R.capital, latest = cap.rows[0];
-    var h = '<p class="hint">Record your balances whenever you like. Receivables and payables always use today\'s live totals.</p>';
+    var h = '<p class="hint">Record your balances whenever you like. Money to collect and money to pay always use today\'s live totals. The same balances are used for your Daily Cash Check.</p>';
     h += '<div class="figures">' +
-      '<div class="figure wide"><div class="label">Working capital' + (latest ? ', from your ' + esc(shortDate(latest.date)) + ' snapshot' : '') + '</div><div class="big ' + (latest && latest.working < 0 ? 'c-late' : 'c-credit') + '">' + (latest ? money(latest.working) : 'Not recorded') + '</div>' +
+      '<div class="figure wide"><div class="label">Working Capital' + (latest ? ', from ' + esc(shortDate(latest.date)) : '') + '</div><div class="big ' + (latest && latest.working < 0 ? 'c-late' : 'c-credit') + '">' + (latest ? money(latest.working) : 'Not recorded') + '</div>' +
       '<div class="sub">Available capital, plus money to collect, minus money to pay</div></div>' +
-      '<div class="figure"><div class="label">Available capital</div><div class="big">' + (latest ? money(latest.available) : '—') + '</div></div>' +
-      '<div class="figure"><div class="label">To collect</div><div class="big c-owed">' + money(cap.receivables) + '</div><div class="sub">From customers and agents</div></div>' +
-      '<div class="figure wide"><div class="label">To pay</div><div class="big">' + money(cap.payables) + '</div><div class="sub">To agents, plus what customers paid in advance</div></div></div>';
-    h += '<div class="section-title">Snapshots</div>';
+      '<div class="figure"><div class="label">Available Capital</div><div class="big">' + (latest ? money(latest.available) : '—') + '</div></div>' +
+      '<div class="figure"><div class="label">To Collect</div><div class="big c-owed">' + money(cap.receivables) + '</div><div class="sub">From customers and agents</div></div>' +
+      '<div class="figure wide"><div class="label">To Pay</div><div class="big">' + money(cap.payables) + '</div><div class="sub">To agents, plus what customers paid in advance</div></div></div>';
+    h += '<div class="section-title">Your Recorded Balances</div>';
     h += cap.rows.length ? cap.rows.map(function (s) {
-      return '<button class="row" data-act="editCapital" data-id="' + esc(s.id) + '"><div class="top"><div class="name">' + esc(readable(s.date)) + '</div><span class="amount">' + money(s.available) + '</span></div>' +
+      return '<button class="row" data-act="openCheck" data-id="' + esc(s.id) + '"><div class="top"><div class="name">' + esc(readable(s.date)) + (s.time ? ' · ' + esc(s.time) : '') + '</div><span class="amount">' + money(s.available) + '</span></div>' +
         '<div class="bottom"><span class="c-muted">Available capital</span>' + (s.notes ? '<span class="c-muted">' + esc(s.notes) + '</span>' : '') + '</div></button>';
-    }).join('') : empty('No snapshots yet', 'Tap the yellow button to record your balances.');
+    }).join('') : empty('No balances yet', 'Tap the green button to record your balances.');
     return h;
   };
+
+  /* ----- Expenses and money out ----- */
+  VIEWS.expenses = function () {
+    var rows = R.expenses.rows.slice().sort(entryNewer2), h = '<p class="hint">Record money that left your business: data or airtime you bought, rent, transport, withdrawals. These make your Daily Cash Check and Monthly Balance Check accurate.</p>';
+    if (!rows.length) return h + empty('Nothing recorded', 'Tap the red button to record money out.');
+    var lastM = '';
+    rows.slice(0, UI.limit).forEach(function (r) {
+      var m = (r.date || '').slice(0, 7);
+      if (m !== lastM) {
+        var tot = R.expenses.rows.filter(function (x) { return (x.date || '').slice(0, 7) === m; }).reduce(function (s, x) { return s + num(x.amount); }, 0);
+        h += '<div class="month-head"><h2>' + esc(monthName(m) || 'No Date') + '</h2><span class="meta">' + money(tot) + ' out</span></div>'; lastM = m;
+      }
+      h += expenseRow(r);
+    });
+    return h;
+  };
+  function entryNewer2(a, b) { return byNewest(a, b); }
 
   /* ----- Backup ----- */
   VIEWS.backup = function () {
@@ -718,16 +1058,15 @@
       '<button class="btn block" data-act="exportCsv">Download sales for Excel</button>';
   };
 
-  /* ----- Settings ----- */
-  var SETTING_LISTS = [['channels', 'Payment channels'], ['exTypes', 'Wallet exchange types'], ['agentTxTypes', 'Agent transaction types'],
-    ['wallets', 'Commission wallets'], ['evcProviders', 'EVC providers'], ['capitalAccounts', 'Capital accounts'],
-    ['woReasons', 'Write-off reasons'], ['errorTypes', 'Error types'], ['causedBy', 'Who caused an error']];
-  VIEWS.settings = function () {
+  /* ----- Your Choices (editable lists) ----- */
+  var SETTING_LISTS = [['channels', 'Payment Channels'], ['exTypes', 'Wallet Exchange Types'], ['agentTxTypes', 'Agent Transaction Types'],
+    ['wallets', 'Commission Wallets'], ['evcProviders', 'EVC Operators'], ['capitalAccounts', 'Capital and Cash Accounts'],
+    ['expenseCats', 'Money Out Categories'], ['woReasons', 'Write-Off Reasons'], ['errorTypes', 'Error Types'], ['causedBy', 'Who Caused an Error']];
+  VIEWS.choices = function () {
     var s = S.settings;
-    return '<div class="field"><label for="set-cc">Country code for WhatsApp</label><input id="set-cc" inputmode="numeric" value="' + esc(s.countryCode) + '"><div class="note">Added to 7-digit numbers when sending on WhatsApp. The Gambia is 220.</div></div>' +
-      '<p class="hint">Edit the choices in each list below. Put one item on each line.</p>' +
+    return '<p class="hint" style="margin-top:0">Change the choices that appear in your forms. Put one item on each line. You can add your own, for example another wallet or EVC operator.</p>' +
       SETTING_LISTS.map(function (l) { return '<div class="field"><label for="set-' + l[0] + '">' + l[1] + '</label><textarea id="set-' + l[0] + '" rows="5">' + esc((s[l[0]] || []).join('\n')) + '</textarea></div>'; }).join('') +
-      '<button class="btn primary block" data-act="saveSettings">Save settings</button>';
+      '<button class="btn primary block" data-act="saveSettings">Save My Choices</button>';
   };
 
   /* ----- Help ----- */
@@ -742,7 +1081,7 @@
       '<h3>Paying an old debt late</h3><p>Open the old sale and tap "Record a payment", or put the full amount on the new sale. A payment covers its own sale first, and anything extra pays off the oldest unpaid sales. Either way the old sale turns Paid and the app records how many days late it was paid.</p>' +
       '<h3>Statuses</h3><p>Paid: settled. Overpaid: in credit. Outstanding: unpaid for up to 3 days. Overdue: unpaid for more than 3 days. Bad debt: written off.</p>' +
       '<h3>Customer types</h3><p>Regular: 3 or more sales and at least one a month. Irregular: fewer. Inactive: no sale for 90 days. Bad (high risk): oldest unpaid sale is over 60 days old. Do not give credit: something was written off.</p>' +
-      '<h3>Agents</h3><p>"You gave" is money or float you sent to the agent. "You got" is what they sent you. If you gave more than you got, it shows as To collect; if you got more, it shows as To pay.</p>' +
+      '<h3>Agents</h3><p>"Paid to Agent" is money or float you sent to the agent. "Received from Agent" is what they sent you. If you paid more than you received, it shows as To Collect. If you received more, it shows as To Pay.</p>' +
       '<h3>EVC</h3><p>Commission = purchase x return rate. Royalty = retail part x retail royalty rate, plus wholesale part x wholesale royalty rate. On the wholesale part, the rest goes to the wholesaler.</p>' +
       '<h3>Your data</h3><p>Everything stays on this phone and works without internet. Back it up every week from More, then Backup and restore.</p></div>';
   };
@@ -834,17 +1173,51 @@
     else toast('Press and hold the text to copy it.');
   }
 
-  /* ================= Phone networks ================= */
-  var NETS = [['Africell', '87'], ['QCell', '83'], ['Comium', '86'], ['Gamcel', '']];
-  function netLine(v) {
-    var d = C.gmDigits(v); if (d.length < 7) return '';
-    var n = C.gmNetwork(v);
-    var h = '<span class="netpill">' + (n ? esc(n.name) + (n.prefix ? ' ' + n.prefix : '') : 'Network not known') + '</span><span class="netq">Not right?</span>';
-    return h + NETS.filter(function (x) { return !n || x[0] !== n.name; }).map(function (x) {
-      return '<button type="button" class="netbtn" data-act="setNet" data-v="' + x[1] + '">' + x[0] + '</button>';
-    }).join('');
+  /* ================= Phone numbers ================= */
+  function ccOptions(sel) {
+    var list = COUNTRIES.list.slice().sort(function (x, y) { return x.iso === 'GM' ? -1 : y.iso === 'GM' ? 1 : x.name.localeCompare(y.name); });
+    return list.map(function (c) { return '<option value="' + c.iso + '"' + (c.iso === sel ? ' selected' : '') + '>+' + c.dial + ' ' + esc(c.name) + '</option>'; }).join('');
   }
-  function updateNet(inp) { var line = inp.closest('.field') && inp.closest('.field').querySelector('.netline'); if (line) line.innerHTML = netLine(inp.value); }
+  function phoneNote(raw, iso) {
+    var s = String(raw || '').trim(), d = s.replace(/\D/g, '');
+    if (!/^(\+|00)/.test(s) && d.length < (iso === 'GM' ? 7 : 6)) return '';
+    var p = C.parsePhone(s, iso);
+    if (!p.ok) return '<span class="neterr">' + esc(p.error) + '</span>';
+    var h = p.network ? '<span class="netpill">' + esc(p.network) + (p.prefix ? ' · ' + p.prefix : '') + '</span>' : '<span class="netpill alt">' + esc(p.country) + '</span>';
+    if (p.iso === 'GM' && d !== p.local && !/^(\+|00)/.test(s)) h += '<span class="netq">Will be saved as ' + esc(p.value.charAt(0) === '+' ? '+220 ' + p.local : p.local) + '</span>';
+    return h;
+  }
+  function telHTML(f, v, id, list) {
+    var info = C.phoneInfo(v), iso = info.iso || S.settings.profile.country, shown = info.empty ? '' : info.local;
+    return '<div class="telrow"><select class="ccsel" name="' + f.k + '__cc" aria-label="Country of this number">' + ccOptions(iso) + '</select>' +
+      '<input id="' + id + '" name="' + f.k + '" type="tel" inputmode="tel"' + list + ' value="' + esc(shown) + '" autocomplete="off"></div><div class="netline">' + phoneNote(shown, iso) + '</div>';
+  }
+  function telBox(el) { return el && el.closest('.field'); }
+  function updateNet(el) {
+    var box = telBox(el); if (!box) return;
+    var inp = box.querySelector('input[type=tel]'), sel = box.querySelector('.ccsel'), line = box.querySelector('.netline');
+    if (inp && line) line.innerHTML = phoneNote(inp.value, sel ? sel.value : S.settings.profile.country);
+  }
+  function telParse(el) {
+    var box = telBox(el), inp = box.querySelector('input[type=tel]'), sel = box.querySelector('.ccsel');
+    return C.parsePhone(inp.value, sel ? sel.value : S.settings.profile.country);
+  }
+  function setTel(box, stored) {
+    var inp = box.querySelector('input[type=tel]'), sel = box.querySelector('.ccsel'), info = C.phoneInfo(stored);
+    if (sel) sel.value = info.iso || S.settings.profile.country;
+    inp.value = info.empty ? '' : info.local; updateNet(inp);
+  }
+  // When someone leaves the box: show the standard form of the number, and pick the country if they typed +code.
+  function tidyTel(inp) {
+    var box = telBox(inp), sel = box.querySelector('.ccsel'), raw = inp.value.trim(); if (!raw) { updateNet(inp); return; }
+    var p = C.parsePhone(raw, sel ? sel.value : S.settings.profile.country);
+    if (p.ok && !p.empty) {
+      if (sel && p.iso) sel.value = p.iso;
+      if (p.iso === 'GM' && raw.replace(/\D/g, '').length === 7 && p.prefix) toast('Changed to the new 9-digit number');
+      inp.value = p.local;
+    }
+    updateNet(inp);
+  }
 
   /* ================= Risk ================= */
   function riskFor(key) { var l = R.risk.customers; for (var i = 0; i < l.length; i++) if (l[i].key === key) return l[i]; return null; }
@@ -905,212 +1278,159 @@
     return h;
   };
 
-  /* ================= Several sales at once ================= */
-  function channelOptions(first) {
-    return '<option value="">' + first + '</option>' + S.settings.channels.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('');
-  }
-  function batchRow(i) {
-    return '<div class="batch-row"><div class="batch-head"><b>Sale ' + (i + 1) + '</b><button type="button" class="linkbtn" data-act="batchRemove">Remove</button></div>' +
-      '<div class="field"><label>Date</label><input type="date" class="b-date" aria-label="Date" value="' + esc(UI.batchDate || '') + '"></div>' +
-      '<div class="field"><label>Customer phone</label><input type="tel" inputmode="tel" class="b-phone" aria-label="Customer phone" list="custPhones" autocomplete="off"><div class="netline"></div></div>' +
-      '<div class="field"><label>Customer name</label><input type="text" class="b-name" aria-label="Customer name" list="custNames" autocomplete="off"></div>' +
-      '<div class="field"><label>Bundle, deposit or details</label><input type="text" class="b-details" aria-label="Details"></div>' +
-      '<div class="two"><div class="field"><label>Amount</label><input type="number" step="any" inputmode="decimal" class="b-amount" aria-label="Amount"></div>' +
-      '<div class="field"><label>Paid through</label><select class="b-channel" aria-label="Paid through">' + channelOptions('Same as above') + '</select></div></div>' +
-      '<label class="check"><input type="checkbox" class="b-paid" checked><span>Paid in full now</span></label>' +
-      '<div class="field b-recv-wrap hide" style="margin-top:10px"><label>Amount received so far</label><input type="number" step="any" inputmode="decimal" class="b-received" aria-label="Amount received"></div></div>';
-  }
-  function openBatch() {
-    UI.batchDate = ''; UI.batchKind = 'DS';
-    var top = '<div id="batch-top">' + seg('batchKind', 'DS', [['DS', 'Data / deposit'], ['WE', 'Wallet exchange']]) +
-      fieldHTML({ k: 'bdate', t: 'pickdate', label: 'Date for these sales' }, {}) +
-      '<div class="field"><label for="b-chan">Paid through, for all rows</label><select id="b-chan">' +
-      S.settings.channels.map(function (c) { return '<option' + (c === (S.meta.lastChannel || S.settings.channels[0]) ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></div>' +
-      '<div class="field hide" id="b-ex-wrap"><label for="b-ex">Exchange type, for all rows</label><select id="b-ex">' + opts('exTypes').map(function (x) { return '<option>' + esc(x) + '</option>'; }).join('') + '</select></div></div>';
-    var body = '<p class="hint" style="margin-top:0">Type several sales, then save them all at once. The date you choose goes on every row; you can still change any row\'s date.</p>' +
-      '<div id="form-error"></div>' + top + '<div id="batch-rows">' + batchRow(0) + batchRow(1) + batchRow(2) + '</div>' +
-      '<button class="btn block" data-act="batchAdd">Add another row</button>' + datalists();
-    var foot = '<button class="btn primary" data-act="batchSave">Save all</button>';
-    if (UI.sheetOpen) {
-      var sh = document.querySelector('#sheetwrap .sheet');
-      sh.querySelector('header h2').textContent = 'Several sales at once';
-      sh.querySelector('.body').innerHTML = body; sh.querySelector('footer').innerHTML = foot; sh.querySelector('.body').scrollTop = 0;
-      FORM = null;
-    } else openSheet('Several sales at once', body, foot);
-  }
-  function batchDateChanged(v) {
-    UI.batchDate = v;
-    Array.prototype.forEach.call(document.querySelectorAll('#batch-rows .b-date'), function (inp) { if (!inp.dataset.touched) inp.value = v; });
-  }
-  function renumberBatch() {
-    Array.prototype.forEach.call(document.querySelectorAll('#batch-rows .batch-head b'), function (b, i) { b.textContent = 'Sale ' + (i + 1); });
-  }
-  function batchSave() {
-    var rows = document.querySelectorAll('#batch-rows .batch-row'), errs = [], out = [];
-    var chan = document.getElementById('b-chan').value, ex = document.getElementById('b-ex').value, kind = UI.batchKind || 'DS';
-    Array.prototype.forEach.call(rows, function (row, i) {
-      var g = function (cls) { var el = row.querySelector('.' + cls); return el ? (el.type === 'checkbox' ? el.checked : el.value.trim()) : ''; };
-      var phone = g('b-phone'), name = g('b-name'), amount = g('b-amount');
-      if (!phone && !name && !amount && !g('b-details')) return;
-      var date = g('b-date'), miss = [];
-      if (!date) miss.push('date'); if (!name) miss.push('name'); if (amount === '' || !(Number(amount) >= 0)) miss.push('amount');
-      if (miss.length) { errs.push('Sale ' + (i + 1) + ': add the ' + miss.join(', ')); return; }
-      var paid = g('b-paid'), rec = g('b-received');
-      var r = { kind: kind, date: date, phone: phone ? (C.gmNormalize(phone) || phone) : '', name: name, details: g('b-details'),
-        billed: Number(amount), received: paid ? Number(amount) : (rec === '' ? '' : Number(rec)), channel: g('b-channel') || chan };
-      if (kind === 'WE') r.exType = ex;
-      out.push(r);
-    });
-    var box = document.getElementById('form-error');
-    if (errs.length) { box.innerHTML = '<div class="form-error">' + errs.map(esc).join('<br>') + '</div>'; document.querySelector('.sheet .body').scrollTop = 0; return; }
-    if (!out.length) { box.innerHTML = '<div class="form-error">Type at least one sale.</div>'; return; }
-    out.forEach(function (r) { r.id = uid(); r.seq = S.nextSeq++; S.sales.push(r); });
-    S.meta.lastChannel = chan;
-    persist().then(function () { toast('Saved ' + out.length + (out.length === 1 ? ' sale' : ' sales')); });
-    closeSheet(); render();
-  }
-
   /* ================= Forms ================= */
   function opts(src) { return typeof src === 'string' ? (S.settings[src] || []) : src; }
+  function labelOf(f, vals) { return typeof f.label === 'function' ? f.label(vals) : (f.label || ''); }
+  function isReq(f, vals) { return typeof f.req === 'function' ? !!f.req(vals) : !!f.req; }
+  function tipLabel() {
+    var m = S.settings.tipMode;
+    return m === 'included' ? 'Tip Included in the Amount Received' : m === 'passon' ? 'Tip to Hand Over (Not Your Income)' : 'Tip on Top (Extra Income)';
+  }
+  function woLabel() { return 'Write Off as Bad Debt (' + sym() + ')'; }
+  function isWE(v) { return v.kind === 'WE'; }
+  function notWE(v) { return v.kind !== 'WE'; }
+  function isPart(v) { return v.payMode === 'part'; }
+  function isPaid(v) { return v.payMode === 'full' || v.payMode === 'part'; }
+  function inferPay(r) {
+    if (r.payMode) return r.payMode;
+    if (!(num(r.billed) > 0)) return '';
+    return num(r.received) >= num(r.billed) ? 'full' : num(r.received) > 0 ? 'part' : 'credit';
+  }
+  function lastEvcFor(provider) {
+    var rows = S.evc.filter(function (r) { return !provider || r.provider === provider; }).sort(byNewest);
+    return rows[0] || null;
+  }
+
   var SCHEMAS = {
-    sale: { title: ['New sale', 'Edit sale'], coll: 'sales', fields: [
-      { k: 'kind', t: 'seg', opts: [['DS', 'Data / deposit'], ['WE', 'Wallet exchange']] },
-      { k: 'date', t: 'pickdate', label: 'Date of this sale', req: 1 },
-      { k: 'phone', t: 'tel', label: 'Customer WhatsApp / phone', list: 'custPhones' },
-      { k: 'name', t: 'text', label: 'Customer name', req: 1, list: 'custNames' },
-      { k: 'exType', t: 'select', label: 'Exchange type', opts: 'exTypes', show: function (v) { return v.kind === 'WE'; } },
-      { k: 'details', t: 'text', label: 'Bundle, deposit or details' },
-      { k: 'billed', t: 'num', label: 'Amount', req: 1, half: 1 },
-      { k: 'channel', t: 'select', label: 'Paid through', opts: 'channels', half: 1 },
-      { k: 'paidFull', t: 'check', label: 'Paid in full now' },
-      { k: 'received', t: 'num', label: 'Amount received so far', show: function (v) { return !v.paidFull; }, note: 'Leave empty if they paid nothing yet.' },
-      { k: 'bank', t: 'text', label: 'Bank name', show: function (v) { return v.channel === 'Bank Transfer'; } },
-      { k: 'beneficiary', t: 'tel', label: 'Number that received it, if different', more: 1 },
-      { k: 'tip', t: 'num', label: 'Tip received', more: 1, half: 1 },
-      { k: 'ref', t: 'text', label: 'Reference / transaction ID', more: 1, half: 1 },
-      { k: 'datePaid', t: 'date', label: 'Date paid, only if paid later', note: 'Saves how many days late they paid.', more: 1 },
-      { k: 'writtenOff', t: 'num', label: 'Write off as bad debt (D)', note: 'Only if you will never collect it.', more: 1 },
-      { k: 'woReason', t: 'select', label: 'Reason for write-off', opts: 'woReasons', show: function (v) { return num(v.writtenOff) > 0; }, more: 1 },
+    sale: { title: ['New Sale', 'Edit Sale'], coll: 'sales', prefix: function (v) { return v.kind === 'WE' ? 'WE' : 'DS'; }, fields: [
+      { k: 'kind', t: 'seg', opts: [['DS', 'Data / Deposit'], ['WE', 'Wallet Exchange']] },
+      { k: 'date', t: 'pickdate', label: 'Date of This Sale', req: 1 },
+      { k: 'time', t: 'time', label: 'Time the Customer Did It', note: 'Optional. The app also saves the exact moment you recorded the sale.' },
+      { k: 'phone', t: 'tel', label: 'Customer WhatsApp / Phone', list: 'custPhones' },
+      { k: 'name', t: 'text', label: 'Customer Name', req: 1, list: 'custNames' },
+      { k: 'exType', t: 'select', label: 'Exchange Type', opts: 'exTypes', show: isWE },
+      { k: 'details', t: 'text', label: 'Bundle, Deposit or Details' },
+      { k: 'billed', t: 'num', label: 'Amount', req: 1 },
+      { k: 'costOut', t: 'num', label: 'Amount You Sent Out (Optional)', note: 'What you paid out to the customer. It keeps your balance checks accurate.', show: isWE },
+      { k: 'payMode', t: 'paymode', label: 'How Was It Paid?', req: 1 },
+      { k: 'received', t: 'num', label: 'Amount Received So Far', req: isPart, show: isPart },
+      { k: 'channel', t: 'selectother', label: 'Paid Through', opts: 'channels', req: isPaid, show: isPaid },
+      { k: 'bank', t: 'text', label: 'Bank Name', show: function (v) { return isPaid(v) && v.channel === 'Bank Transfer'; } },
+      { k: 'costDs', t: 'num', label: 'What the Data or Airtime Cost You (Optional)', note: 'Used in your balance checks.', more: 1, show: notWE },
+      { k: 'tip', t: 'num', label: tipLabel, more: 1 },
+      { k: 'beneficiary', t: 'tel', label: 'Number That Received the Data or Money (If Different)', more: 1 },
+      { k: 'datePaid', t: 'date', label: 'Date Paid, Only If Paid Later', note: 'Saves how many days late they paid.', more: 1 },
+      { k: 'writtenOff', t: 'num', label: woLabel, note: 'Only if you will never collect it.', more: 1 },
+      { k: 'woReason', t: 'select', label: 'Reason for Write-Off', opts: 'woReasons', show: function (v) { return num(v.writtenOff) > 0; }, more: 1 },
       { k: 'notes', t: 'area', label: 'Notes', more: 1 }],
-      defaults: function () { return { kind: 'DS', date: '', channel: S.meta.lastChannel || S.settings.channels[0] || '', paidFull: true }; },
-      keep: ['kind', 'date', 'channel'],
-      info: saleInfo },
-    payment: { title: ['Customer paid', 'Edit payment'], coll: 'sales', fields: [
-      { k: 'date', t: 'pickdate', label: 'Date they paid', req: 1 },
-      { k: 'phone', t: 'tel', label: 'Customer WhatsApp / phone', list: 'custPhones' },
-      { k: 'name', t: 'text', label: 'Customer name', req: 1, list: 'custNames' },
-      { k: 'received', t: 'num', label: 'Amount paid', req: 1, half: 1 },
-      { k: 'channel', t: 'select', label: 'Paid through', opts: 'channels', half: 1 },
-      { k: 'bank', t: 'text', label: 'Bank name', show: function (v) { return v.channel === 'Bank Transfer'; } },
-      { k: 'ref', t: 'text', label: 'Reference / transaction ID', more: 1 },
+      defaults: function () { return { kind: 'DS', date: '', payMode: S.settings.payDefault || '', channel: '' }; },
+      keep: ['kind', 'date'], info: saleInfo },
+    payment: { title: ['Customer Paid', 'Edit Payment'], coll: 'sales', prefix: function () { return 'PY'; }, fields: [
+      { k: 'date', t: 'pickdate', label: 'Date They Paid', req: 1 },
+      { k: 'time', t: 'time', label: 'Time They Paid', note: 'Optional. The app also saves the exact moment you recorded it.' },
+      { k: 'phone', t: 'tel', label: 'Customer WhatsApp / Phone', list: 'custPhones' },
+      { k: 'name', t: 'text', label: 'Customer Name', req: 1, list: 'custNames' },
+      { k: 'received', t: 'num', label: 'Amount Paid', req: 1 },
+      { k: 'channel', t: 'selectother', label: 'Paid Through', opts: 'channels', req: 1 },
+      { k: 'bank', t: 'text', label: 'Bank Name', show: function (v) { return v.channel === 'Bank Transfer'; } },
+      { k: 'tip', t: 'num', label: tipLabel, more: 1 },
       { k: 'notes', t: 'area', label: 'Notes', more: 1 }],
-      defaults: function () { return { date: '', channel: S.meta.lastChannel || S.settings.channels[0] || '' }; },
-      keep: ['date', 'channel'],
-      info: paymentInfo },
-    agent: { title: ['New agent entry', 'Edit agent entry'], coll: 'agents', fields: [
-      { k: 'date', t: 'pickdate', label: 'Date of this entry', req: 1 },
-      { k: 'name', t: 'text', label: 'Agent name', req: 1, list: 'agentNames', note: 'Use the same name every time, even if they use another number.' },
-      { k: 'txType', t: 'select', label: 'Transaction type', opts: 'agentTxTypes' },
-      { k: 'desc', t: 'text', label: 'Description', note: 'For example: ComCash float, Xpress deposit, GT Bank to Wave.' },
-      { k: 'toAgent', t: 'num', label: 'You gave the agent', half: 1 },
-      { k: 'fromAgent', t: 'num', label: 'The agent gave you', half: 1 },
-      { k: 'phone', t: 'tel', label: 'Agent WhatsApp / phone', half: 1, more: 1 },
-      { k: 'type', t: 'select', label: 'Agent type', opts: ['Regular Agent', 'Master Agent'], half: 1, more: 1 },
-      { k: 'txNumber', t: 'tel', label: 'Number that received it', note: 'The phone number that received the float, credit or service.', more: 1 },
-      { k: 'writtenOff', t: 'num', label: 'Write off as bad debt (D)', more: 1 },
-      { k: 'woReason', t: 'select', label: 'Reason for write-off', opts: 'woReasons', show: function (v) { return num(v.writtenOff) > 0; }, more: 1 },
+      defaults: function () { return { date: '', channel: '' }; },
+      keep: ['date'], info: paymentInfo,
+      check: function (v, errs) { if (!(num(v.received) > 0)) errs.push('Type the amount they paid.'); } },
+    agent: { title: ['New Agent Entry', 'Edit Agent Entry'], coll: 'agents', prefix: function () { return 'AL'; }, fields: [
+      { k: 'date', t: 'pickdate', label: 'Date of This Entry', req: 1 },
+      { k: 'time', t: 'time', label: 'Time of the Transaction', note: 'Optional. The app also saves the exact moment you recorded it.' },
+      { k: 'name', t: 'text', label: 'Agent Name', req: 1, list: 'agentNames', note: 'Use the same name every time, even if the agent uses another number.' },
+      { k: 'txType', t: 'select', label: 'Transaction Type', opts: 'agentTxTypes' },
+      { k: 'desc', t: 'text', label: 'Description', note: 'For example: ComCach float, Xpress deposit, GT Bank to Wave.' },
+      { k: 'toAgent', t: 'num', label: 'Paid to Agent', half: 1 },
+      { k: 'fromAgent', t: 'num', label: 'Received from Agent', half: 1 },
+      { k: 'txNumber', t: 'tel', label: 'Number That Received the Service', note: 'The phone number that received the float, credit or service.', more: 1 },
+      { k: 'phone', t: 'tel', label: 'Agent WhatsApp / Phone', more: 1 },
+      { k: 'type', t: 'select', label: 'Agent Type', opts: ['Regular Agent', 'Master Agent'], more: 1 },
+      { k: 'writtenOff', t: 'num', label: woLabel, more: 1 },
+      { k: 'woReason', t: 'select', label: 'Reason for Write-Off', opts: 'woReasons', show: function (v) { return num(v.writtenOff) > 0; }, more: 1 },
       { k: 'notes', t: 'area', label: 'Notes', more: 1 }],
       defaults: function () { return { date: '', type: 'Regular Agent' }; },
-      keep: ['date'],
-      info: agentInfo },
-    referral: { title: ['New referral sale', 'Edit referral sale'], coll: 'referrals', fields: [
-      { k: 'date', t: 'pickdate', label: 'Date of this sale', req: 1 },
-      { k: 'agent', t: 'text', label: 'Referring agent', req: 1, list: 'refAgents' },
+      keep: ['date'], info: agentInfo,
+      check: function (v, errs) { if (!C.has(v.toAgent) && !C.has(v.fromAgent) && !(num(v.writtenOff) > 0)) errs.push('Type the amount you paid to the agent, or received from the agent.'); } },
+    referral: { title: ['New Referral Sale', 'Edit Referral Sale'], coll: 'referrals', prefix: function () { return 'RA'; }, fields: [
+      { k: 'date', t: 'pickdate', label: 'Date of This Sale', req: 1 },
+      { k: 'time', t: 'time', label: 'Time (Optional)' },
+      { k: 'agent', t: 'text', label: 'Referring Agent', req: 1, list: 'refAgents' },
       { k: 'service', t: 'select', label: 'Service', opts: ['Data Sending', 'Deposit', 'EVC'], req: 1 },
-      { k: 'amount', t: 'num', label: 'Amount (or the day\'s total)', req: 1 },
-      { k: 'rate', t: 'num', label: 'Commission rate (%)', show: function (v) { return v.service !== 'Deposit'; }, half: 1 },
-      { k: 'share', t: 'num', label: 'Agent\'s share (%)', half: 1 },
-      { k: 'agentPhone', t: 'tel', label: 'Agent WhatsApp / phone', more: 1 },
-      { k: 'client', t: 'text', label: 'Client name', half: 1, more: 1 },
-      { k: 'clientPhone', t: 'tel', label: 'Client phone', half: 1, more: 1 },
+      { k: 'amount', t: 'num', label: 'Amount (or the Day\'s Total)', req: 1 },
+      { k: 'rate', t: 'num', label: 'Commission Rate (%)', show: function (v) { return v.service !== 'Deposit'; }, half: 1 },
+      { k: 'share', t: 'num', label: 'Agent\'s Share (%)', half: 1 },
+      { k: 'agentPhone', t: 'tel', label: 'Agent WhatsApp / Phone', more: 1 },
+      { k: 'client', t: 'text', label: 'Client Name', more: 1 },
+      { k: 'clientPhone', t: 'tel', label: 'Client Phone', more: 1 },
       { k: 'notes', t: 'area', label: 'Notes', more: 1 }],
       defaults: function () { return { date: '', service: 'Data Sending', share: 50 }; },
-      keep: ['date', 'agent', 'agentPhone', 'service', 'rate', 'share'],
-      info: refInfo },
-    wallet: { title: ['New wallet commission', 'Edit wallet commission'], coll: 'walletComm', fields: [
-      { k: 'month', t: 'month', label: 'Month', req: 1, half: 1 },
-      { k: 'wallet', t: 'select', label: 'Wallet', opts: 'wallets', req: 1, half: 1 },
-      { k: 'earned', t: 'num', label: 'Commission on statement', half: 1 },
-      { k: 'received', t: 'num', label: 'Commission paid to you', half: 1 },
-      { k: 'shared', t: 'num', label: 'Shared with an agent', half: 1, more: 1 },
-      { k: 'agentName', t: 'text', label: 'Which agent', list: 'agentNames', half: 1, more: 1 },
+      keep: ['date', 'agent', 'agentPhone', 'service', 'rate', 'share'], info: refInfo },
+    wallet: { title: ['New Wallet Commission', 'Edit Wallet Commission'], coll: 'walletComm', fields: [
+      { k: 'month', t: 'month', label: 'Month', req: 1 },
+      { k: 'wallet', t: 'selectother', label: 'Wallet', opts: 'wallets', req: 1 },
+      { k: 'earned', t: 'num', label: 'Commission on Statement', half: 1 },
+      { k: 'received', t: 'num', label: 'Commission Paid to You', half: 1 },
+      { k: 'shared', t: 'num', label: 'Shared with an Agent or Partner', more: 1 },
+      { k: 'agentName', t: 'text', label: 'Agent or Partner Name', list: 'agentNames', more: 1 },
       { k: 'notes', t: 'area', label: 'Notes', more: 1 }],
       defaults: function () { return { month: R.today.slice(0, 7) }; },
-      info: function (v) { return calcBox([['Net commission', money(num(v.received) - num(v.shared))]]); } },
-    evc: { title: ['New EVC entry', 'Edit EVC entry'], coll: 'evc', fields: [
-      { k: 'month', t: 'month', label: 'Month', req: 1, half: 1 },
-      { k: 'provider', t: 'select', label: 'Provider', opts: 'evcProviders', req: 1, half: 1 },
-      { k: 'purchase', t: 'num', label: 'Purchase amount', req: 1, half: 1 },
-      { k: 'wholesale', t: 'num', label: 'Part sold wholesale', half: 1, note: 'To fellow EVC dealers.' },
-      { k: 'wholesaler', t: 'text', label: 'Wholesaler name', show: function (v) { return num(v.wholesale) > 0; } },
-      { k: 'rate', t: 'num', label: 'Return rate (%)', half: 1, more: 1 },
-      { k: 'retailRoy', t: 'num', label: 'Retail royalty (%)', half: 1, more: 1 },
-      { k: 'wholesaleRoy', t: 'num', label: 'Wholesale royalty (%)', more: 1 },
+      info: function (v) { return calcBox([['Net Commission', money(num(v.received) - num(v.shared))]]); } },
+    evc: { title: ['New EVC Entry', 'Edit EVC Entry'], coll: 'evc', fields: [
+      { k: 'month', t: 'month', label: 'Month', req: 1 },
+      { k: 'provider', t: 'selectother', label: 'EVC Operator', opts: 'evcProviders', req: 1 },
+      { k: 'purchase', t: 'num', label: 'Purchase Amount', req: 1, half: 1 },
+      { k: 'wholesale', t: 'num', label: 'Part Sold to Other Dealers', half: 1, note: 'Wholesale. Leave empty if you sold it all to customers.' },
+      { k: 'wholesaler', t: 'text', label: 'Dealer Name', show: function (v) { return num(v.wholesale) > 0; } },
+      { k: 'rate', t: 'num', label: 'Operator Commission Rate (%)', note: 'The percentage the operator gives you on what you buy.' },
+      { k: 'retailRoy', t: 'num', label: 'Share Paid to Partner on Retail Sales (%)', note: 'Only if you share part of your commission with a partner or line owner. Otherwise leave it at 0.', more: 1 },
+      { k: 'wholesaleRoy', t: 'num', label: 'Share Paid to Partner on Wholesale (%)', more: 1 },
       { k: 'notes', t: 'area', label: 'Notes', more: 1 }],
-      defaults: function () { return { month: R.today.slice(0, 7), rate: 7, retailRoy: 2, wholesaleRoy: 1, provider: S.settings.evcProviders[0] || '' }; },
+      defaults: function () {
+        var last = lastEvcFor(''), d = { month: R.today.slice(0, 7), provider: '' };
+        if (last) { d.rate = last.rate; d.retailRoy = last.retailRoy; d.wholesaleRoy = last.wholesaleRoy; }
+        return d;
+      },
       info: function (v) {
         var x = C.computeEvc([v])[0];
-        return calcBox([['Retail part', money(x.retail)], ['Total commission', money(x.total)], ['Royalty', money(x.royalty)], ['To wholesaler', money(x.toWholesaler)], ['You earn', money(x.net)]]);
+        return calcBox([['Retail Part', money(x.retail)], ['Total Commission', money(x.total)], ['Shared with Partner', money(x.royalty)], ['Passed to Dealer', money(x.toWholesaler)], ['You Keep', money(x.net)]]);
       } },
-    error: { title: ['Log an error', 'Edit error'], coll: 'errors', fields: [
-      { k: 'date', t: 'date', label: 'Date found', req: 1, half: 1 },
+    expense: { title: ['Money Out', 'Edit Money Out'], coll: 'expenses', prefix: function () { return 'EX'; }, fields: [
+      { k: 'date', t: 'pickdate', label: 'Date It Was Paid', req: 1 },
+      { k: 'time', t: 'time', label: 'Time (Optional)' },
+      { k: 'category', t: 'selectother', label: 'What Was It For?', opts: 'expenseCats', req: 1 },
+      { k: 'amount', t: 'num', label: 'Amount', req: 1 },
+      { k: 'paidFrom', t: 'select', label: 'Paid From', opts: 'capitalAccounts' },
+      { k: 'note', t: 'text', label: 'Note' }],
+      defaults: function () { return { date: '' }; },
+      keep: ['date', 'category', 'paidFrom'],
+      check: function (v, errs) { if (!(num(v.amount) > 0)) errs.push('Type an amount greater than 0.'); } },
+    error: { title: ['Log an Error', 'Edit Error'], coll: 'errors', fields: [
+      { k: 'date', t: 'date', label: 'Date Found', req: 1, half: 1 },
       { k: 'status', t: 'select', label: 'Status', opts: ['Open', 'In Progress', 'Fixed'], half: 1 },
-      { k: 'type', t: 'select', label: 'Type of error', opts: 'errorTypes' },
-      { k: 'desc', t: 'area', label: 'What happened' },
-      { k: 'ledToLoss', t: 'select', label: 'Did it cost money?', opts: ['No', 'Yes'], half: 1 },
-      { k: 'amountLost', t: 'num', label: 'Amount lost', half: 1, show: function (v) { return v.ledToLoss === 'Yes'; } },
-      { k: 'ref', t: 'text', label: 'Customer, agent or ref ID', more: 1 },
-      { k: 'causedBy', t: 'select', label: 'Caused by', opts: 'causedBy', half: 1, more: 1 },
-      { k: 'foundBy', t: 'text', label: 'Found by', half: 1, more: 1 },
-      { k: 'correction', t: 'area', label: 'How it was fixed', more: 1 },
-      { k: 'dateFixed', t: 'date', label: 'Date fixed', more: 1 }],
-      defaults: function () { return { date: R.today, status: 'Open', ledToLoss: 'No' }; } },
-    daily: { title: ['Cash check', 'Cash check'], fields: [
-      { k: 'openCash', t: 'num', label: 'Opening cash', half: 1 },
-      { k: 'openFloat', t: 'num', label: 'Opening wallet float', half: 1 },
-      { k: 'paidOut', t: 'num', label: 'Cash or expenses paid out' },
-      { k: 'counted', t: 'num', label: 'What you counted at closing' },
-      { k: 'notes', t: 'area', label: 'Notes' }],
-      info: function (v) {
-        var d = R.daily.filter(function (x) { return x.date === FORM.date; })[0] || { received: 0, count: 0 };
-        var expected = r2(num(v.openCash) + num(v.openFloat) + d.received - num(v.paidOut));
-        var rows = [['Sales that day', d.count], ['Received, with tips', money(d.received)], ['You should have', money(expected)]];
-        if (C.has(v.counted)) { var diff = r2(num(v.counted) - expected); rows.push(['Difference', diff === 0 ? 'Balanced' : (diff > 0 ? 'Extra ' : 'Missing ') + money(Math.abs(diff))]); }
-        return calcBox(rows);
-      } },
-    recon: { title: ['Reconcile month', 'Reconcile month'], fields: [
-      { k: 'statement', t: 'num', label: 'Total received on your statements' },
-      { k: 'status', t: 'select', label: 'Reconciled?', opts: ['Pending', 'Yes', 'No'] },
-      { k: 'notes', t: 'area', label: 'Notes' }],
-      info: function (v) {
-        var m = R.recon.filter(function (x) { return x.month === FORM.month; })[0] || { received: 0 };
-        var rows = [['Your records say received', money(m.received)]];
-        if (C.has(v.statement)) { var d = r2(m.received - num(v.statement)); rows.push(['Difference', d === 0 ? 'None, it matches' : money(d)]); }
-        return calcBox(rows);
-      } }
+      { k: 'type', t: 'select', label: 'Type of Error', opts: 'errorTypes' },
+      { k: 'desc', t: 'area', label: 'What Happened' },
+      { k: 'ledToLoss', t: 'select', label: 'Did It Cost Money?', opts: ['No', 'Yes'], half: 1 },
+      { k: 'amountLost', t: 'num', label: 'Amount Lost', half: 1, show: function (v) { return v.ledToLoss === 'Yes'; } },
+      { k: 'causedBy', t: 'select', label: 'Caused By', opts: 'causedBy', half: 1, more: 1 },
+      { k: 'foundBy', t: 'text', label: 'Found By', half: 1, more: 1 },
+      { k: 'correction', t: 'area', label: 'How It Was Fixed', more: 1 },
+      { k: 'dateFixed', t: 'date', label: 'Date Fixed', more: 1 }],
+      defaults: function () { return { date: R.today, status: 'Open', ledToLoss: 'No' }; } }
   };
   function calcBox(rows) { return '<div class="calc-box">' + rows.map(function (r) { return '<div><span>' + esc(r[0]) + '</span><b>' + r[1] + '</b></div>'; }).join('') + '</div>'; }
   function saleInfo(v) {
-    var h = '';
-    if (C.has(v.billed)) {
-      var sf = r2(num(v.billed) - (v.paidFull ? num(v.billed) : num(v.received)) - num(v.writtenOff));
-      h += calcBox([['This sale', sf > 0 ? money(sf) + ' unpaid' : sf < 0 ? 'Overpaid by ' + money(-sf) : 'Fully paid']]);
-    }
+    var h = '', billed = num(v.billed), rec = v.payMode === 'full' ? billed : v.payMode === 'credit' ? 0 : num(v.received);
+    var applied = Math.max(0, rec - (S.settings.tipMode === 'included' ? num(v.tip) : 0));
+    var sf = r2(billed - applied - num(v.writtenOff));
+    if (C.has(v.billed) && v.payMode) h += calcBox([['This Sale', sf > 0 ? money(sf) + ' to collect' : sf < 0 ? 'Overpaid by ' + money(-sf) : 'Fully paid']]);
     if (v.phone || v.name) {
       var c = findCustomer(C.custKey(v));
       if (c && FORM && FORM.isNew) {
-        h += '<div class="form-info">' + esc(c.name || 'Known customer') + ' ' + (c.balance > 0 ? 'still has ' + money(c.balance) + ' to pay.' : c.credit > 0 ? 'paid ' + money(c.credit) + ' in advance. It is used on this sale automatically.' : 'has nothing to pay.') +
-          ' ' + esc(c.type) + ' customer.</div>';
+        h += '<div class="form-info">' + esc(c.name || 'Known customer') + ' ' + (c.balance > 0 ? 'still has ' + money(c.balance) + ' to pay.' : c.credit > 0 ? 'paid ' + money(c.credit) + ' in advance. It is used on this sale automatically.' : 'has nothing to pay.') + ' ' + esc(c.type) + ' customer.</div>';
         h += creditWarning(c, sf);
       }
     }
@@ -1120,13 +1440,13 @@
     if (!(v.phone || v.name)) return '';
     var c = findCustomer(C.custKey(v));
     if (!c) return '<div class="form-info">New customer: this payment is recorded as credit they can use later.</div>';
-    var after = r2(c.balance - num(v.received));
-    return calcBox([['Still to pay now', c.balance > 0 ? money(c.balance) : c.balance < 0 ? 'Nothing (credit ' + money(-c.balance) + ')' : 'Nothing'],
-      ['After this payment', after > 0 ? 'Still to pay ' + money(after) : after < 0 ? 'Credit ' + money(-after) : 'Settled']]);
+    var applied = Math.max(0, num(v.received) - (S.settings.tipMode === 'included' ? num(v.tip) : 0)), after = r2(c.balance - applied);
+    return calcBox([['Still to Pay Now', c.balance > 0 ? money(c.balance) : c.balance < 0 ? 'Nothing (credit ' + money(-c.balance) + ')' : 'Nothing'],
+      ['After This Payment', after > 0 ? 'Still to pay ' + money(after) : after < 0 ? 'Credit ' + money(-after) : 'Settled']]);
   }
   function agentInfo(v) {
     var n = r2(num(v.toAgent) - num(v.fromAgent) - num(v.writtenOff)), h = '';
-    if (C.has(v.toAgent) || C.has(v.fromAgent)) h += calcBox([['This entry', n > 0 ? 'To collect ' + money(n) : n < 0 ? 'To pay ' + money(-n) : 'Even']]);
+    if (C.has(v.toAgent) || C.has(v.fromAgent)) h += calcBox([['This Entry', n > 0 ? 'To collect ' + money(n) : n < 0 ? 'To pay ' + money(-n) : 'Even']]);
     var a = v.name ? findAgent(C.agentKey(v.name)) : null;
     if (a && FORM && FORM.isNew) {
       var after = r2(a.net + n);
@@ -1138,13 +1458,16 @@
   function refInfo(v) {
     var x = C.has(v.amount) ? (v.service === 'Deposit' ? C.bracketCommission(v.amount, S.brackets) : r2(num(v.amount) * num(v.rate) / 100)) : 0;
     var cut = r2(x * num(v.share) / 100);
-    return calcBox([['Commission', money(x)], ['Agent\'s cut', money(cut)], ['You keep', money(x - cut)]]);
+    return calcBox([['Commission', money(x)], ['Agent\'s Cut', money(cut)], ['You Keep', money(x - cut)]]);
   }
 
   var FORM = null;
   function datalists() {
-    var names = {}, phones = {}, agents = {}, refAgents = {};
-    R.customers.forEach(function (c) { if (c.name) names[c.name] = 1; if (c.phone) phones[c.phone] = c.name; });
+    var names = {}, phones = {}, agents = {}, refAgents = {}, home = S.settings.profile.country;
+    R.customers.forEach(function (c) {
+      if (c.name) names[c.name] = 1;
+      var p = C.phoneInfo(c.phone); if (!p.empty) phones[p.iso === home || !p.iso ? p.local : '+' + String(c.phone).replace(/\D/g, '')] = c.name;
+    });
     R.agents.balances.forEach(function (a) { agents[a.name] = 1; refAgents[a.name] = 1; });
     R.referrals.rows.forEach(function (r) { if (r.agent) refAgents[String(r.agent).trim()] = 1; });
     function dl(id, obj, labels) { return '<datalist id="' + id + '">' + Object.keys(obj).map(function (k) { return '<option value="' + esc(k) + '"' + (labels && obj[k] ? ' label="' + esc(obj[k]) + '"' : '') + '></option>'; }).join('') + '</datalist>'; }
@@ -1152,9 +1475,10 @@
   }
   function fieldHTML(f, vals) {
     var v = vals[f.k]; if (v == null) v = '';
-    var id = 'f_' + f.k, hide = f.show && !f.show(vals) ? ' hide' : '';
-    var lab = f.label ? '<label for="' + id + '">' + esc(f.label) + (f.req ? ' *' : '') + '</label>' : '';
-    var inp, list = f.list ? ' list="' + f.list + '"' : '';
+    var id = 'f_' + f.k, hide = f.show && !f.show(vals) ? ' hide' : '', text = labelOf(f, vals), req = isReq(f, vals) || f.req ? ' *' : '';
+    var lab = text ? '<label for="' + id + '">' + esc(text) + req + '</label>' : '';
+    var note = f.note ? '<div class="note">' + esc(f.note) + '</div>' : '';
+    var list = f.list ? ' list="' + f.list + '"' : '';
     if (f.t === 'seg') {
       return '<div class="field" data-field="' + f.k + '"><div class="seg">' + f.opts.map(function (o) {
         return '<button type="button" data-act="formSeg" data-k="' + f.k + '" data-v="' + esc(o[0]) + '" class="' + (v === o[0] ? 'on' : '') + '">' + esc(o[1]) + '</button>';
@@ -1163,27 +1487,37 @@
     if (f.t === 'pickdate') {
       var yd = addDays(R.today, -1), which = !v ? '' : v === R.today ? 'today' : v === yd ? 'yesterday' : 'other';
       var chip = function (w, t1, t2) { return '<button type="button" class="dchip' + (which === w ? ' on' : '') + '" data-act="pickDate" data-v="' + w + '"><b>' + t1 + '</b><small>' + t2 + '</small></button>'; };
-      return '<div class="field datefield" data-field="' + f.k + '"><label for="' + id + '">' + esc(f.label) + ' *</label><div class="datechips">' +
-        chip('today', 'Today', dayShort(R.today)) + chip('yesterday', 'Yesterday', dayShort(yd)) + chip('other', 'Other date', which === 'other' ? dayShort(v) : 'Pick') +
+      return '<div class="field datefield" data-field="' + f.k + '"><label for="' + id + '">' + esc(text) + ' *</label><div class="datechips">' +
+        chip('today', 'Today', dayShort(R.today)) + chip('yesterday', 'Yesterday', dayShort(yd)) + chip('other', 'Other Date', which === 'other' ? dayShort(v) : 'Pick') +
         '</div><input id="' + id + '" name="' + f.k + '" type="date" value="' + esc(v) + '" class="' + (which === 'other' ? '' : 'hide-date') + '">' +
         (which ? '' : '<div class="note datenote">Tap the date of this transaction.</div>') + '</div>';
     }
-    if (f.t === 'check') {
-      return '<div class="field' + hide + '" data-field="' + f.k + '"><label class="check"><input type="checkbox" name="' + f.k + '"' + (v ? ' checked' : '') + '><span>' + esc(f.label) + '</span></label></div>';
+    if (f.t === 'paymode') {
+      var modes = [['full', 'Paid in Full', 'Money received'], ['part', 'Part Paid', 'Some received'], ['credit', 'On Credit', 'Nothing yet']];
+      return '<div class="field" data-field="' + f.k + '"><label>' + esc(text) + ' *</label><div class="paychips">' + modes.map(function (m) {
+        return '<button type="button" class="pchip ' + m[0] + (v === m[0] ? ' on' : '') + '" data-act="payMode" data-v="' + m[0] + '"><b>' + m[1] + '</b><small>' + m[2] + '</small></button>';
+      }).join('') + '</div><input type="hidden" name="' + f.k + '" value="' + esc(v) + '">' + (v ? '' : '<div class="note datenote">Tap how this sale was paid.</div>') + '</div>';
     }
-    if (f.t === 'select') {
+    if (f.t === 'check') {
+      return '<div class="field' + hide + '" data-field="' + f.k + '"><label class="check"><input type="checkbox" name="' + f.k + '"' + (v ? ' checked' : '') + '><span>' + esc(text) + '</span></label></div>';
+    }
+    var inp;
+    if (f.t === 'select' || f.t === 'selectother') {
       var o = opts(f.opts).slice(); if (v && o.indexOf(v) < 0) o.unshift(v);
-      inp = '<select id="' + id + '" name="' + f.k + '"><option value="">Choose</option>' + o.map(function (x) { return '<option' + (x === v ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('') + '</select>';
+      inp = '<select id="' + id + '" name="' + f.k + '"><option value="">Choose</option>' + o.map(function (x) { return '<option' + (x === v ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('') +
+        (f.t === 'selectother' ? '<option value="__other">Other (type your own)…</option>' : '') + '</select>';
+      if (f.t === 'selectother') inp += '<input class="otherbox hide" name="' + f.k + '__other" placeholder="Type it here" aria-label="Other, type your own" autocomplete="off">';
     } else if (f.t === 'area') {
       inp = '<textarea id="' + id + '" name="' + f.k + '">' + esc(v) + '</textarea>';
     } else if (f.t === 'num') {
       inp = '<input id="' + id + '" name="' + f.k + '" type="number" step="any" inputmode="decimal" value="' + esc(v) + '">';
+    } else if (f.t === 'tel') {
+      inp = telHTML(f, v, id, list);
     } else {
-      var type = f.t === 'tel' ? 'tel' : f.t === 'date' ? 'date' : f.t === 'month' ? 'month' : 'text';
-      inp = '<input id="' + id + '" name="' + f.k + '" type="' + type + '"' + list + ' value="' + esc(v) + '" autocomplete="off"' + (f.t === 'tel' ? ' inputmode="tel"' : '') + '>';
-      if (f.t === 'tel') inp += '<div class="netline">' + netLine(v) + '</div>';
+      var type = f.t === 'date' ? 'date' : f.t === 'month' ? 'month' : f.t === 'time' ? 'time' : 'text';
+      inp = '<input id="' + id + '" name="' + f.k + '" type="' + type + '"' + list + ' value="' + esc(v) + '" autocomplete="off">';
     }
-    return '<div class="field' + hide + '" data-field="' + f.k + '">' + lab + inp + (f.note ? '<div class="note">' + esc(f.note) + '</div>' : '') + '</div>';
+    return '<div class="field' + hide + '" data-field="' + f.k + '">' + lab + inp + note + '</div>';
   }
   function fieldsHTML(fields, vals) {
     var h = '', i = 0;
@@ -1197,26 +1531,31 @@
   function formBody(fields, vals, openMore) {
     var main = fields.filter(function (f) { return !f.more; }), extra = fields.filter(function (f) { return f.more; });
     var h = fieldsHTML(main, vals);
-    if (extra.length) h += '<details class="more-fields"' + (openMore ? ' open' : '') + '><summary>More details</summary><div class="inner">' + fieldsHTML(extra, vals) + '</div></details>';
+    if (extra.length) h += '<details class="more-fields"' + (openMore ? ' open' : '') + '><summary>More Details</summary><div class="inner">' + fieldsHTML(extra, vals) + '</div></details>';
     return h;
   }
   function hasMoreValues(fields, vals) {
-    return fields.some(function (f) { var v = vals[f.k]; return f.more && v !== '' && v != null && v !== 0; });
+    return fields.some(function (f) { var v = vals[f.k]; return f.more && v !== '' && v != null && v !== 0 && v !== false; });
   }
+  function autoTime(vals) { if (vals.date === R.today && !vals.time) vals.time = nowTime(); return vals; }
   function openForm(type, rec, extra) {
     var sc = SCHEMAS[type], isNew = !rec;
     var vals = Object.assign({}, isNew && sc.defaults ? sc.defaults() : {}, rec || {}, (extra && extra.prefill) || {});
-    if (type === 'sale' && !isNew) vals.paidFull = C.has(rec.billed) && num(rec.billed) > 0 && num(rec.received) === num(rec.billed);
+    if (type === 'sale') { vals.payMode = isNew ? vals.payMode : inferPay(rec); if (!isNew) vals.costDs = rec.costOut; }
+    if (isNew && sc.fields.some(function (f) { return f.k === 'time'; })) autoTime(vals);
     var title = (extra && extra.title) || sc.title[isNew ? 0 : 1];
-    var body = (type === 'sale' && isNew ? '<button type="button" class="btn block" data-act="openBatch" style="margin-bottom:12px">Several sales? Record them all at once</button>' : '') +
+    var body = (type === 'sale' && isNew ? '<button type="button" class="btn block" data-act="openBatch" data-mode="sale" style="margin-bottom:12px">Several Sales? Record Them All at Once</button>' : '') +
+      (type === 'agent' && isNew ? '<button type="button" class="btn block" data-act="openAgentBatch" style="margin-bottom:12px">Several Entries? Record Them All at Once</button>' : '') +
       '<div id="form-error"></div>' + formBody(sc.fields, vals, !isNew && hasMoreValues(sc.fields, vals)) + '<div id="form-info"></div>' + datalists();
-    if (type === 'sale' && !isNew) {
+    if (!isNew && rec.id && sc.coll === 'sales') {
       var cs = R.sales.filter(function (x) { return x.id === rec.id; })[0];
-      if (cs && cs.remaining > 0) body += '<button class="btn kiosk block" data-act="recordPayment" style="margin-bottom:10px">Record a payment on this sale</button>';
-      if (cs) body += '<p class="hint">Ref ID ' + esc(cs.refId) + '. Account after this sale: ' + (cs.balance > 0 ? 'owes ' + money(cs.balance) : cs.balance < 0 ? 'credit ' + money(-cs.balance) : 'settled') + '.</p>';
+      if (cs && cs.remaining > 0 && type === 'sale') body += '<button class="btn kiosk block" data-act="recordPayment" style="margin-bottom:10px">Record a Payment on This Sale</button>';
+    }
+    if (!isNew) {
+      body += '<p class="hint">Reference ' + esc(rec.refId || '') + (rec.recordedAt ? '. Recorded ' + esc(stamp(rec.recordedAt)) : '') + (rec.editedAt ? '. Last changed ' + esc(stamp(rec.editedAt)) : '') + '.</p>';
     }
     var foot = (!isNew && sc.coll ? '<button class="btn danger" data-act="deleteRec">Delete</button>' : '') +
-      (isNew && sc.keep ? '<button class="btn" data-act="saveAnother">Save, add another</button>' : '') +
+      (isNew && sc.keep ? '<button class="btn" data-act="saveAnother">Save, Add Another</button>' : '') +
       '<button class="btn primary" data-act="saveForm">Save</button>';
     openSheet(title, body, foot);
     FORM = Object.assign({ type: type, schema: sc, rec: rec, isNew: isNew }, extra || {});
@@ -1227,7 +1566,13 @@
     FORM.schema.fields.forEach(function (f) {
       var inp = el.querySelector('[name="' + f.k + '"]'); if (!inp) return;
       if (f.t === 'check') { vals[f.k] = !!inp.checked; return; }
+      if (f.t === 'tel') { var p = telParse(inp); vals[f.k] = p.ok ? p.value : inp.value.trim(); vals['__tel_' + f.k] = p; return; }
       var x = inp.value;
+      if (f.t === 'selectother') {
+        vals['__pick_' + f.k] = x;
+        if (x === '__other') { var ob = el.querySelector('[name="' + f.k + '__other"]'); x = ob ? ob.value.trim() : ''; }
+        vals[f.k] = x; return;
+      }
       vals[f.k] = f.t === 'num' ? (String(x).trim() === '' ? '' : Number(x)) : String(x).trim();
     });
     return vals;
@@ -1236,8 +1581,11 @@
     if (!FORM) return;
     var vals = collect(), el = document.getElementById('sheetwrap');
     FORM.schema.fields.forEach(function (f) {
-      if (!f.show) return;
-      var box = el.querySelector('[data-field="' + f.k + '"]'); if (box) box.classList.toggle('hide', !f.show(vals));
+      var box = el.querySelector('[data-field="' + f.k + '"]'); if (!box) return;
+      if (f.show) box.classList.toggle('hide', !f.show(vals));
+      if (f.t === 'selectother') { var ob = box.querySelector('.otherbox'); if (ob) ob.classList.toggle('hide', vals['__pick_' + f.k] !== '__other'); }
+      var lb = box.querySelector('label[for]'); if (lb && typeof f.label === 'function') lb.textContent = f.label(vals) + (isReq(f, vals) ? ' *' : '');
+      else if (lb && typeof f.req === 'function') lb.textContent = labelOf(f, vals) + (isReq(f, vals) ? ' *' : '');
     });
     var info = el.querySelector('#form-info');
     if (info && FORM.schema.info) info.innerHTML = FORM.schema.info(vals);
@@ -1261,76 +1609,451 @@
   }
   function closeSheet() { if (UI.sheetOpen) history.back(); }
   function findRec(coll, id) { var a = S[coll]; for (var i = 0; i < a.length; i++) if (a[i].id === id) return a[i]; return null; }
-
+  function showErr(msgs) {
+    var box = document.getElementById('form-error'); if (!box) return;
+    box.innerHTML = '<div class="form-error">' + msgs.map(esc).join('<br>') + '</div>';
+    var b = document.querySelector('.sheet .body'); if (b) b.scrollTop = 0;
+  }
   function refillForm(type, prefill) {
-    var sc = SCHEMAS[type], vals = Object.assign({}, sc.defaults ? sc.defaults() : {}, prefill || {});
+    var sc = SCHEMAS[type], vals = Object.assign({}, sc.defaults ? sc.defaults() : {}, prefill || {}); autoTime(vals);
     var el = document.querySelector('#sheetwrap .body');
     el.innerHTML = '<div id="form-error"></div>' + formBody(sc.fields, vals, false) + '<div id="form-info"></div>' + datalists();
     FORM = { type: type, schema: sc, rec: null, isNew: true };
     refreshForm(); el.scrollTop = 0;
   }
-  function saveForm(addAnother) {
-    var F = FORM, vals = collect(), missing = [];
-    F.schema.fields.forEach(function (f) {
-      if (f.req && (vals[f.k] === '' || vals[f.k] == null) && !(f.show && !f.show(vals))) missing.push(f.label);
-    });
-    if (missing.length) { document.getElementById('form-error').innerHTML = '<div class="form-error">Fill in: ' + esc(missing.join(', ')) + '.</div>'; document.querySelector('.sheet .body').scrollTop = 0; return; }
-    F.schema.fields.forEach(function (f) { if (f.show && !f.show(vals)) vals[f.k] = ''; });
-    F.schema.fields.forEach(function (f) { if (f.t === 'tel' && vals[f.k]) vals[f.k] = C.gmNormalize(vals[f.k]) || vals[f.k]; });
-    if (F.type === 'payment' && !(num(vals.received) > 0)) {
-      document.getElementById('form-error').innerHTML = '<div class="form-error">Type the amount they paid.</div>'; return;
+  function recordMeta(F, vals) {
+    var pf = F.schema.prefix ? F.schema.prefix(vals) : '';
+    if (F.isNew) {
+      vals.id = uid(); vals.seq = S.nextSeq++; vals.recordedAt = Date.now();
+      if (pf) vals.refId = C.newRefId(S, pf, vals.date);
     }
-    var kept = {};
-    (F.schema.keep || []).forEach(function (k) { kept[k] = vals[k]; });
-    if (F.type === 'sale') { if (vals.paidFull) vals.received = vals.billed; delete vals.paidFull; }
-    if (F.type === 'payment') { vals.kind = 'DS'; vals.billed = 0; if (F.isNew) vals.details = 'Payment received'; }
+  }
+  function saveForm(addAnother) {
+    var F = FORM, vals = collect(), errs = [], missing = [];
+    F.schema.fields.forEach(function (f) {
+      if (f.show && !f.show(vals)) return;
+      if ((isReq(f, vals) || f.req) && (vals[f.k] === '' || vals[f.k] == null)) missing.push(labelOf(f, vals));
+      if (f.t === 'tel') { var p = vals['__tel_' + f.k]; if (p && !p.empty && !p.ok) errs.push(labelOf(f, vals) + ': ' + p.error); }
+    });
+    if (missing.length) errs.unshift('Fill in: ' + missing.join(', ') + '.');
+    if (F.type === 'sale' && vals.payMode === 'part') {
+      var rcv = num(vals.received), bil = num(vals.billed);
+      if (C.has(vals.received) && C.has(vals.billed) && (rcv <= 0 || rcv >= bil)) errs.push('For Part Paid, the amount received must be more than 0 and less than the amount. If they paid it all, choose Paid in Full.');
+    }
+    if (F.schema.check) F.schema.check(vals, errs);
+    if (errs.length) { showErr(errs); return; }
+    F.schema.fields.forEach(function (f) { if (f.show && !f.show(vals)) vals[f.k] = ''; });
+    // Choices typed under "Other" join the lists for next time.
+    F.schema.fields.forEach(function (f) {
+      if (f.t === 'selectother' && vals[f.k] && typeof f.opts === 'string') {
+        var list = S.settings[f.opts] || []; if (list.indexOf(vals[f.k]) < 0) S.settings[f.opts] = list.concat([vals[f.k]]);
+      }
+    });
+    if (F.type === 'sale') {
+      if (vals.payMode === 'full') vals.received = vals.billed;
+      else if (vals.payMode === 'credit') { vals.received = 0; vals.channel = ''; vals.bank = ''; }
+      if (vals.kind === 'WE') vals.costDs = ''; else { vals.costOut = vals.costDs; vals.exType = ''; }
+      delete vals.costDs; vals.type = '';
+    }
+    if (F.type === 'payment') { vals.kind = 'DS'; vals.type = 'payment'; vals.billed = 0; vals.payMode = ''; vals.details = 'Payment received'; }
+    var kept = {}; (F.schema.keep || []).forEach(function (k) { kept[k] = vals[k]; });
     if (vals.channel) S.meta.lastChannel = vals.channel;
-    if (F.type === 'daily') { S.daily[F.date] = vals; }
-    else if (F.type === 'recon') { S.recon[F.month] = vals; }
-    else if (F.type === 'capital') { saveCapital(vals); }
-    else if (F.isNew) { vals.id = uid(); vals.seq = S.nextSeq++; S[F.schema.coll].push(vals); }
-    else { Object.assign(F.rec, vals); }
+    Object.keys(vals).forEach(function (k) { if (k.indexOf('__') === 0) delete vals[k]; });
+    var savedId = '';
+    if (F.type === 'capital') savedId = saveCapital(vals);
+    else if (F.isNew) { recordMeta(F, vals); S[F.schema.coll].push(vals); }
+    else { Object.assign(F.rec, vals); F.rec.editedAt = Date.now(); if (!F.rec.refId && F.schema.prefix) F.rec.refId = C.newRefId(S, F.schema.prefix(F.rec), F.rec.date); }
     if (addAnother && F.isNew && F.schema.keep) {
       persist(); render(); refillForm(F.type, kept); toast('Saved. Add the next one.');
       return;
     }
-    persist().then(function () { toast('Saved'); });
+    persist().then(function () { toast(F.type === 'capital' ? checkMessage(savedId) : 'Saved'); });
     closeSheet(); render();
   }
+  function checkMessage(id) {
+    var ck = R.checks.filter(function (c) { return c.id === id; })[0];
+    if (!ck) return 'Saved';
+    if (ck.opening === null) return 'Saved. This is your starting point for the next check.';
+    if (ck.status === 'Balanced') return 'Saved. Your money balances.';
+    return 'Saved. ' + money(Math.abs(ck.diff)) + (ck.status === 'Missing' ? ' is missing' : ' extra') + '. Open Daily Cash Check to see why.';
+  }
 
-  /* Capital form is built from the account list in Settings */
-  function openCapital(rec) {
+  /* Balances form: every wallet, bank and cash account, plus any you add yourself */
+  function snapPrev(date, skipId) {
+    var list = S.capital.filter(function (s) { return s.id !== skipId && (!date || s.date <= date); }).sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : (b.seq || 0) - (a.seq || 0); });
+    return list[0] || null;
+  }
+  function buildCapital(rec, vals) {
     var accounts = S.settings.capitalAccounts.slice();
-    var prev = rec || (S.capital.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; })[0]);
     if (rec) Object.keys(rec.balances || {}).forEach(function (k) { if (accounts.indexOf(k) < 0) accounts.push(k); });
-    var fields = [{ k: 'date', t: 'date', label: 'Date', req: 1 }].concat(accounts.map(function (a, i) { return { k: 'b' + i, t: 'num', label: a, half: 1, acct: a }; }))
+    var fields = [{ k: 'date', t: 'pickdate', label: 'Date of These Balances', req: 1 }, { k: 'time', t: 'time', label: 'Time (Optional)' }]
+      .concat(accounts.map(function (a, i) { return { k: 'b' + i, t: 'num', label: a, half: 1, acct: a }; }))
       .concat([{ k: 'notes', t: 'area', label: 'Notes' }]);
-    var vals = { date: rec ? rec.date : R.today, notes: rec ? rec.notes : '' };
-    fields.forEach(function (f) { if (f.acct && prev && prev.balances) vals[f.k] = prev.balances[f.acct]; });
-    SCHEMAS.capital = { title: ['New snapshot', 'Edit snapshot'], coll: 'capital', fields: fields,
-      info: function (v) { var t = 0; fields.forEach(function (f) { if (f.acct) t += num(v[f.k]); }); return calcBox([['Available capital', money(t)]]); } };
+    function balancesOf(v) { var b = {}; fields.forEach(function (f) { if (f.acct) b[f.acct] = v[f.k]; }); return b; }
+    SCHEMAS.capital = { title: ['Record Balances', 'Change Balances'], coll: 'capital', fields: fields, keep: null,
+      info: function (v) {
+        var total = 0; fields.forEach(function (f) { if (f.acct) total += num(v[f.k]); });
+        var rows = [['Total You Counted', money(total)]], extra = '';
+        if (v.date) {
+          try {
+            var tmp = { id: '__new__', seq: 1e9, date: v.date, balances: balancesOf(v) };
+            var st = Object.assign({}, S, { capital: S.capital.filter(function (x) { return !(FORM && FORM.rec && x.id === FORM.rec.id) && x.date !== v.date; }).concat([tmp]) });
+            var ck = C.computeAll(st).checks.filter(function (x) { return x.id === '__new__'; })[0];
+            if (ck && ck.opening !== null) {
+              rows.push(['You Should Have', money(ck.expected)], ['Difference', ck.diff === 0 ? 'None, it balances' : (ck.diff < 0 ? 'Missing ' : 'Extra ') + money(Math.abs(ck.diff))]);
+            } else if (ck) extra = '<div class="form-info">This is your first record. The next one will be checked against it.</div>';
+          } catch (e) { /* the preview is only a help */ }
+        }
+        return calcBox(rows) + extra;
+      } };
+    C.setOptions(S.settings);
+    return { fields: fields, vals: vals };
+  }
+  function openCapital(rec, presetDate) {
+    var prev = rec ? snapPrev(rec.date, rec.id) : snapPrev('', '');
+    (rec || prev) && Object.keys((rec || prev).balances || {}).forEach(function (k) { if (S.settings.capitalAccounts.indexOf(k) < 0) S.settings.capitalAccounts = S.settings.capitalAccounts.concat([k]); });
+    var vals = { date: rec ? rec.date : (presetDate || ''), time: rec ? rec.time || '' : '', notes: rec ? rec.notes || '' : '' };
+    var b = buildCapital(rec, vals), src = rec || prev;
+    b.fields.forEach(function (f) { if (f.acct && src && src.balances && C.has(src.balances[f.acct])) vals[f.k] = src.balances[f.acct]; });
     FORM = null;
-    openForm('capital', rec || null, { prefill: vals, title: rec ? 'Edit snapshot' : 'New snapshot' });
-    if (!rec && prev) document.querySelector('#form-error').innerHTML = '<div class="form-info">Filled in from your last snapshot. Change what has moved.</div>';
+    openForm('capital', rec || null, { prefill: vals, title: rec ? 'Change Balances' : 'Record Balances' });
+    var box = document.getElementById('sheetwrap').querySelector('.body');
+    box.insertAdjacentHTML('beforeend', '<button type="button" class="btn block" data-act="addAccount" style="margin-top:12px">Add Another Account or Wallet</button>');
+    if (!rec && prev) document.getElementById('form-error').innerHTML = '<div class="form-info">Filled in from your last record on ' + esc(shortDate(prev.date)) + '. Change what has moved.</div>';
   }
   function saveCapital(vals) {
-    var bal = {};
-    FORM.schema.fields.forEach(function (f) { if (f.acct) bal[f.acct] = vals[f.k]; });
-    if (FORM.isNew) S.capital.push({ id: uid(), seq: S.nextSeq++, date: vals.date, balances: bal, notes: vals.notes });
-    else { FORM.rec.date = vals.date; FORM.rec.balances = bal; FORM.rec.notes = vals.notes; }
+    var bal = {}; FORM.schema.fields.forEach(function (f) { if (f.acct) bal[f.acct] = vals[f.k] === '' ? 0 : vals[f.k]; });
+    var other = S.capital.filter(function (x) { return x.date === vals.date && !(FORM.rec && x.id === FORM.rec.id); })[0];
+    if (FORM.isNew) {
+      if (other) { other.balances = bal; other.notes = vals.notes; other.time = vals.time; other.editedAt = Date.now(); return other.id; }
+      var rec = { id: uid(), seq: S.nextSeq++, recordedAt: Date.now(), date: vals.date, time: vals.time, balances: bal, notes: vals.notes };
+      S.capital.push(rec); return rec.id;
+    }
+    FORM.rec.date = vals.date; FORM.rec.time = vals.time; FORM.rec.balances = bal; FORM.rec.notes = vals.notes; FORM.rec.editedAt = Date.now();
+    if (other) S.capital.splice(S.capital.indexOf(other), 1);
+    return FORM.rec.id;
+  }
+
+  /* ================= Several at once ================= */
+  function payOptions(sel) {
+    return [['', 'Choose'], ['full', 'Paid in Full'], ['part', 'Part Paid'], ['credit', 'On Credit']].map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === sel ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('');
+  }
+  function chanOptions(first, sel) {
+    return '<option value="">' + first + '</option>' + S.settings.channels.map(function (c) { return '<option' + (c === sel ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('');
+  }
+  function rowTime() { return UI.batchDate === R.today ? nowTime() : ''; }
+  function dateTimeRow() {
+    return '<div class="two"><div class="field"><label>Date</label><input type="date" class="b-date" aria-label="Date" value="' + esc(UI.batchDate || '') + '"></div>' +
+      '<div class="field"><label>Time</label><input type="time" class="b-time" aria-label="Time" value="' + rowTime() + '"></div></div>';
+  }
+  function saleBatchRow(i) {
+    return '<div class="batch-row"><div class="batch-head"><b>Sale ' + (i + 1) + '</b><button type="button" class="linkbtn" data-act="batchRemove">Remove</button></div>' + dateTimeRow() +
+      '<div class="field"><label>Customer Phone</label><div class="telrow"><select class="ccsel b-cc" aria-label="Country of this number">' + ccOptions(S.settings.profile.country) + '</select>' +
+      '<input type="tel" inputmode="tel" class="b-phone" aria-label="Customer phone" list="custPhones" autocomplete="off"></div><div class="netline"></div></div>' +
+      '<div class="field"><label>Customer Name</label><input type="text" class="b-name" aria-label="Customer name" list="custNames" autocomplete="off"></div>' +
+      '<div class="field"><label>Bundle, Deposit or Details</label><input type="text" class="b-details" aria-label="Details"></div>' +
+      '<div class="two"><div class="field"><label>Amount</label><input type="number" step="any" inputmode="decimal" class="b-amount" aria-label="Amount"></div>' +
+      '<div class="field"><label>How Was It Paid?</label><select class="b-pay" aria-label="How was it paid">' + payOptions(S.settings.payDefault || '') + '</select></div></div>' +
+      '<div class="field b-recv-wrap hide"><label>Amount Received So Far</label><input type="number" step="any" inputmode="decimal" class="b-received" aria-label="Amount received so far"></div>' +
+      '<div class="field"><label>Paid Through</label><select class="b-channel" aria-label="Paid through">' + chanOptions('Same as above') + '</select></div></div>';
+  }
+  function agentBatchRow(i) {
+    return '<div class="batch-row"><div class="batch-head"><b>Entry ' + (i + 1) + '</b><button type="button" class="linkbtn" data-act="batchRemove">Remove</button></div>' + dateTimeRow() +
+      '<div class="field"><label>Agent Name</label><input type="text" class="b-agent" aria-label="Agent name" list="agentNames" autocomplete="off"></div>' +
+      '<div class="field"><label>Transaction Type</label><select class="b-txtype" aria-label="Transaction type"><option value="">Choose</option>' + opts('agentTxTypes').map(function (x) { return '<option>' + esc(x) + '</option>'; }).join('') + '</select></div>' +
+      '<div class="field"><label>Description</label><input type="text" class="b-desc" aria-label="Description"></div>' +
+      '<div class="two"><div class="field"><label>Paid to Agent</label><input type="number" step="any" inputmode="decimal" class="b-to" aria-label="Paid to agent"></div>' +
+      '<div class="field"><label>Received from Agent</label><input type="number" step="any" inputmode="decimal" class="b-from" aria-label="Received from agent"></div></div></div>';
+  }
+  function batchRowHTML(i) { return UI.batchMode === 'agent' ? agentBatchRow(i) : saleBatchRow(i); }
+  function openBatch(mode) {
+    UI.batchMode = mode === 'agent' ? 'agent' : 'sale'; UI.batchDate = ''; UI.batchKind = 'DS';
+    var isAgent = UI.batchMode === 'agent', top = '<div id="batch-top">' + (isAgent ? '' : seg('batchKind', 'DS', [['DS', 'Data / Deposit'], ['WE', 'Wallet Exchange']])) +
+      fieldHTML({ k: 'bdate', t: 'pickdate', label: isAgent ? 'Date for These Entries' : 'Date for These Sales' }, {}) +
+      (isAgent ? '' : '<div class="field"><label for="b-chan">Paid Through, for All Rows</label><select id="b-chan">' + chanOptions('Choose', '') + '<option value="__other">Other (type your own)…</option></select>' +
+        '<input class="otherbox hide" id="b-chan-other" placeholder="Type it here" aria-label="Other, type your own" autocomplete="off"></div>' +
+        '<div class="field hide" id="b-ex-wrap"><label for="b-ex">Exchange Type, for All Rows</label><select id="b-ex"><option value="">Choose</option>' + opts('exTypes').map(function (x) { return '<option>' + esc(x) + '</option>'; }).join('') + '</select></div>') + '</div>';
+    var body = '<p class="hint" style="margin-top:0">Type several ' + (isAgent ? 'entries' : 'sales') + ', then save them all at once. The date you choose goes on every row, and you can still change any row\'s date.</p>' +
+      '<div id="form-error"></div>' + top + '<div id="batch-rows">' + batchRowHTML(0) + batchRowHTML(1) + batchRowHTML(2) + '</div>' +
+      '<button class="btn block" data-act="batchAdd">Add Another Row</button>' + datalists();
+    var foot = '<button class="btn primary" data-act="batchSave">Save All</button>', title = isAgent ? 'Several Agent Entries at Once' : 'Several Sales at Once';
+    if (UI.sheetOpen) {
+      var sh = document.querySelector('#sheetwrap .sheet');
+      sh.querySelector('header h2').textContent = title;
+      sh.querySelector('.body').innerHTML = body; sh.querySelector('footer').innerHTML = foot; sh.querySelector('.body').scrollTop = 0;
+      FORM = null;
+    } else openSheet(title, body, foot);
+  }
+  function batchDateChanged(v) {
+    UI.batchDate = v;
+    Array.prototype.forEach.call(document.querySelectorAll('#batch-rows .batch-row'), function (row) {
+      var d = row.querySelector('.b-date'), t = row.querySelector('.b-time');
+      if (!d.dataset.touched) d.value = v;
+      if (t && !t.value && d.value === R.today) t.value = nowTime();
+    });
+  }
+  function renumberBatch() {
+    var word = UI.batchMode === 'agent' ? 'Entry ' : 'Sale ';
+    Array.prototype.forEach.call(document.querySelectorAll('#batch-rows .batch-head b'), function (b, i) { b.textContent = word + (i + 1); });
+  }
+  function batchSave() { if (UI.batchMode === 'agent') batchSaveAgents(); else batchSaveSales(); }
+  function batchFinish(out, coll, prefixOf, label) {
+    var errsBox = document.getElementById('form-error');
+    out.forEach(function (r) { r.id = uid(); r.seq = S.nextSeq++; r.recordedAt = Date.now(); r.refId = C.newRefId(S, prefixOf(r), r.date); S[coll].push(r); });
+    persist().then(function () { toast('Saved ' + out.length + (out.length === 1 ? ' ' + label : ' ' + label + 's')); });
+    closeSheet(); render();
+  }
+  function batchSaveSales() {
+    var rows = document.querySelectorAll('#batch-rows .batch-row'), errs = [], out = [], kind = UI.batchKind || 'DS';
+    var topSel = document.getElementById('b-chan'), topChan = topSel.value === '__other' ? document.getElementById('b-chan-other').value.trim() : topSel.value, ex = document.getElementById('b-ex').value;
+    Array.prototype.forEach.call(rows, function (row, i) {
+      var g = function (cls) { var el = row.querySelector('.' + cls); return el ? el.value.trim() : ''; };
+      var phone = g('b-phone'), name = g('b-name'), amount = g('b-amount'), n = 'Sale ' + (i + 1) + ': ';
+      if (!phone && !name && !amount && !g('b-details')) return;
+      var date = g('b-date'), miss = [], p = phone ? C.parsePhone(phone, row.querySelector('.b-cc').value) : { ok: true, value: '' }, pay = g('b-pay'), rec = g('b-received');
+      if (!date) miss.push('date'); if (!name) miss.push('name'); if (amount === '' || !(Number(amount) >= 0)) miss.push('amount'); if (!pay) miss.push('how it was paid');
+      if (miss.length) { errs.push(n + 'add the ' + miss.join(', ')); return; }
+      if (!p.ok) { errs.push(n + p.error); return; }
+      if (pay === 'part' && !(Number(rec) > 0 && Number(rec) < Number(amount))) { errs.push(n + 'for Part Paid, the amount received must be more than 0 and less than the amount'); return; }
+      var chan = g('b-channel') || topChan;
+      if (pay !== 'credit' && !chan) { errs.push(n + 'choose what it was paid through'); return; }
+      var r = { kind: kind, date: date, time: g('b-time'), phone: p.value || '', name: name, details: g('b-details'), billed: Number(amount),
+        received: pay === 'full' ? Number(amount) : pay === 'credit' ? 0 : Number(rec), payMode: pay, channel: pay === 'credit' ? '' : chan, type: '' };
+      if (kind === 'WE') r.exType = ex;
+      out.push(r);
+    });
+    var box = document.getElementById('form-error');
+    if (errs.length) { box.innerHTML = '<div class="form-error">' + errs.map(esc).join('<br>') + '</div>'; document.querySelector('.sheet .body').scrollTop = 0; return; }
+    if (!out.length) { box.innerHTML = '<div class="form-error">Type at least one sale.</div>'; return; }
+    var chanUsed = out.map(function (r) { return r.channel; }).filter(Boolean);
+    chanUsed.forEach(function (c) { if (S.settings.channels.indexOf(c) < 0) S.settings.channels = S.settings.channels.concat([c]); });
+    if (topChan) S.meta.lastChannel = topChan;
+    batchFinish(out, 'sales', function (r) { return r.kind === 'WE' ? 'WE' : 'DS'; }, 'sale');
+  }
+  function batchSaveAgents() {
+    var rows = document.querySelectorAll('#batch-rows .batch-row'), errs = [], out = [];
+    Array.prototype.forEach.call(rows, function (row, i) {
+      var g = function (cls) { var el = row.querySelector('.' + cls); return el ? el.value.trim() : ''; };
+      var name = g('b-agent'), to = g('b-to'), from = g('b-from'), n = 'Entry ' + (i + 1) + ': ';
+      if (!name && !to && !from && !g('b-desc')) return;
+      var date = g('b-date'), miss = [];
+      if (!date) miss.push('date'); if (!name) miss.push('agent name'); if (to === '' && from === '') miss.push('amount paid or received');
+      if (miss.length) { errs.push(n + 'add the ' + miss.join(', ')); return; }
+      var known = findAgent(C.agentKey(name));
+      out.push({ date: date, time: g('b-time'), name: name, txType: g('b-txtype'), desc: g('b-desc'), toAgent: to === '' ? '' : Number(to), fromAgent: from === '' ? '' : Number(from),
+        phone: known ? known.phone : '', type: known && known.type ? known.type : 'Regular Agent' });
+    });
+    var box = document.getElementById('form-error');
+    if (errs.length) { box.innerHTML = '<div class="form-error">' + errs.map(esc).join('<br>') + '</div>'; document.querySelector('.sheet .body').scrollTop = 0; return; }
+    if (!out.length) { box.innerHTML = '<div class="form-error">Type at least one entry.</div>'; return; }
+    batchFinish(out, 'agents', function () { return 'AL'; }, 'entry');
+  }
+
+  function val(id, d) { var el = document.getElementById(id); return el ? el.value : d; }
+  function signInForm(intro) {
+    return '<div class="card"><p class="hint" style="margin:0 0 10px">' + esc(intro) + '</p>' +
+      '<div class="field"><label for="sync-email">Email</label><input id="sync-email" type="email" autocomplete="username" value="' + esc(UI.syncEmail || '') + '"></div>' +
+      '<div class="field"><label for="sync-pass">Password, at least 6 characters</label><input id="sync-pass" type="password" autocomplete="current-password"></div>' +
+      '<div id="sync-msg"></div><div class="actions"><button class="btn kiosk" data-act="syncSignUp">Create Account</button><button class="btn primary" data-act="syncSignIn">Sign In</button></div>' +
+      '<button class="btn block" data-act="syncReset" style="border:0;background:none;color:var(--ink-soft)">Forgot password?</button></div>';
+  }
+  function deviceBanner() {
+    var al = S.meta.deviceAlerts || []; if (!al.length) return '';
+    var a = al[al.length - 1];
+    return '<div class="banner stack"><span><b>A new phone signed in to your account.</b><br>' + esc(a.name) + ', ' + esc(stamp(a.at)) + '. If this was not you, remove it and change your password.</span>' +
+      '<div class="actions" style="margin:8px 0 0"><button class="btn" data-act="go" data-v="security">Review</button><button class="btn" data-act="dismissAlerts">It Was Me</button></div></div>';
+  }
+  /* ----- PIN pad logic ----- */
+  function pinPress(ch) {
+    var g = gateState();
+    if (g === 'lock') {
+      var n = Security.cfg().pinLen || 4;
+      if (UI.pin.length >= n) return;
+      if (!UI.pin.length) UI.pinMsg = '';
+      UI.pin += ch;
+      if (UI.pin.length < n) { render(); return; }
+      Security.checkPin(UI.pin).then(function (r) {
+        UI.pin = '';
+        if (r.ok) { UI.locked = false; UI.pinMsg = ''; UI.bioTried = false; render(); return; }
+        UI.pinMsg = r.wait ? 'Too many wrong tries. Wait ' + r.wait + ' seconds.' : 'Wrong PIN. Try again.';
+        render();
+      });
+      return;
+    }
+    if (g !== 'pinsetup') return;
+    var step = UI.pinStep || (UI.changing && Security.enabled() ? 0 : 1);
+    if (step === 0) {
+      var len = Security.cfg().pinLen || 4;
+      if (UI.pinBuf.length >= len) return;
+      UI.pinBuf += ch;
+      if (UI.pinBuf.length < len) { render(); return; }
+      Security.checkPin(UI.pinBuf).then(function (r) { UI.pinBuf = ''; if (r.ok) { UI.pinStep = 1; UI.pinMsg = ''; } else UI.pinMsg = r.wait ? 'Too many wrong tries. Wait ' + r.wait + ' seconds.' : 'Wrong PIN. Try again.'; render(); });
+    } else if (step === 1) {
+      if (UI.pinBuf.length >= 6) return;
+      UI.pinBuf += ch; UI.pinMsg = '';
+      if (UI.pinBuf.length === 6) ACT.pinNext(); else render();
+    } else if (step === 2) {
+      UI.pinBuf += ch;
+      if (UI.pinBuf.length < UI.pinFirst.length) { render(); return; }
+      if (UI.pinBuf !== UI.pinFirst) { UI.pinMsg = 'The two PINs did not match. Start again.'; UI.pinStep = 1; UI.pinBuf = ''; UI.pinFirst = ''; render(); return; }
+      var pin = UI.pinFirst; Security.cfg().pinLen = pin.length;
+      Security.setPin(pin).then(function () { return Security.bioSupported(); }).then(function (ok) {
+        UI.pinBuf = ''; UI.pinFirst = ''; UI.bioOK = ok;
+        if (ok && !Security.bioEnabled()) { UI.pinStep = 3; render(); } else ACT.pinDone();
+      });
+    }
+  }
+  function gateForgot() {
+    var back = '<button class="btn block" data-act="forgotBack" style="border:0;background:none;color:var(--ink-soft)">Back</button>';
+    if (signedIn()) {
+      return '<div class="gate bright"><div class="gate-brand"><span class="bigic">' + icon('lock') + '</span><h1>Forgot your PIN?</h1><p>Type your account password. Then you can choose a new PIN.</p></div><div class="card">' +
+        '<div class="field"><label>Email</label><input value="' + esc(Sync.status().email) + '" readonly></div>' +
+        '<div class="field"><label for="gf-pass">Password</label><input id="gf-pass" type="password" autocomplete="current-password"></div><div id="gf-msg"></div>' +
+        '<button class="btn primary block" data-act="forgotReset">Reset My PIN</button>' + back + '</div></div>';
+    }
+    return '<div class="gate bright"><div class="gate-brand"><span class="bigic">' + icon('lock') + '</span><h1>Forgot your PIN?</h1><p>You do not have an account, so there is no way to prove who you are. Your records are only on this phone.</p></div><div class="card">' +
+      '<p class="hint" style="margin-top:0">If you saved a backup, you can erase this phone, start over and restore the backup. Anything not in a backup will be lost.</p>' +
+      '<button class="btn danger block" data-act="lockErase">Erase This Phone and Start Over</button>' + back + '</div></div>';
   }
 
   /* ================= Actions ================= */
   var deferredInstall = null;
-  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); deferredInstall = e; if (cur().v === 'more') render(); });
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); deferredInstall = e; if (cur().v === 'settings') render(); });
 
   var ACT = {
     tab: function (d) { setTab(d.v); },
+    hType: function (d) { UI.hType = d.v; UI.limit = 120; render(); },
+    hRange: function (d) { UI.hRange = d.v; UI.limit = 120; render(); },
+    newExpense: function () { openForm('expense', null); },
+    editExpense: function (d) { var r = findRec('expenses', d.id); if (r) openForm('expense', r); },
+    openCheck: function (d) { go({ v: 'check', id: d.id }); },
+    openAgentBatch: function () { openBatch('agent'); },
+    addAccount: function () {
+      var name = prompt('Name of the new account or wallet. For example: a bank, a new wallet, or money kept at home.');
+      if (name === null) return; name = name.trim(); if (!name) return;
+      if (S.settings.capitalAccounts.some(function (x) { return x.toLowerCase() === name.toLowerCase(); })) { toast('That account is already in the list.'); return; }
+      var cur = FORM && FORM.rec, v = collect(), byAcct = {};
+      FORM.schema.fields.forEach(function (f) { if (f.acct) byAcct[f.acct] = v[f.k]; });
+      S.settings.capitalAccounts = S.settings.capitalAccounts.concat([name]);
+      persist();
+      var b = buildCapital(cur || null, {}), vals = { date: v.date, time: v.time, notes: v.notes };
+      b.fields.forEach(function (f) { if (f.acct && byAcct[f.acct] !== undefined) vals[f.k] = byAcct[f.acct]; });
+      var body = document.querySelector('#sheetwrap .body');
+      body.innerHTML = '<div id="form-error"></div>' + formBody(b.fields, vals, false) + '<div id="form-info"></div>' + datalists() +
+        '<button type="button" class="btn block" data-act="addAccount" style="margin-top:12px">Add Another Account or Wallet</button>';
+      FORM.schema = SCHEMAS.capital; refreshForm(); toast(name + ' added');
+    },
+    payMode: function (d, el) {
+      var field = el.closest('.field');
+      Array.prototype.forEach.call(field.querySelectorAll('.pchip'), function (b) { b.classList.toggle('on', b === el); });
+      field.querySelector('input[type=hidden]').value = d.v;
+      var n = field.querySelector('.datenote'); if (n) n.remove();
+      refreshForm();
+    },
+    applyCountry: function () { setCountry(val('lk-country', 'GM'), true); persist().then(function () { toast('Country, currency and colours updated'); }); render(); },
+    saveCurrency: function () {
+      var sy = val('lk-sym', '').trim(), code = val('lk-code', '').trim().toUpperCase();
+      if (!sy || sy.length > 8) { toast('Type a currency symbol of up to 8 characters.'); return; }
+      S.settings.currency = { symbol: sy, code: code }; applyLocale();
+      persist().then(function () { toast('Currency saved'); }); render();
+    },
+    setTheme: function (d) { S.settings.theme = d.v; applyLocale(); persist(); render(); },
+    setTip: function (d) { S.settings.tipMode = d.v; applyLocale(); persist().then(function () { toast('Tip rule saved'); }); render(); },
+    setPayDefault: function (d) { S.settings.payDefault = d.v; persist().then(function () { toast('Saved'); }); render(); },
+    toggleHide: function () { S.meta.hideAmounts = !S.meta.hideAmounts; persist(); render(); },
+    saveProfile: function () {
+      var name = val('pf-name', '').trim(), iso = val('pf-country', 'GM'), apply = document.getElementById('pf-apply') && document.getElementById('pf-apply').checked;
+      if (!name) { toast('Type your name or business name.'); return; }
+      S.settings.profile.name = name;
+      if (apply) setCountry(iso, true); else { S.settings.profile.country = iso; applyLocale(); }
+      persist().then(function () { toast('Saved'); }); history.back();
+    },
+    gateTab: function (d) { UI.gName = val('gc-name', UI.gName); UI.gCountry = val('gc-country', UI.gCountry); UI.syncEmail = val('sync-email', UI.syncEmail); UI.gateTab = d.v; render(); },
+    gateCreate: function () {
+      var name = val('gc-name', '').trim(), country = val('gc-country', 'GM'), em = val('sync-email', '').trim(), pw = val('sync-pass', '');
+      UI.gName = name; UI.gCountry = country; UI.syncEmail = em;
+      if (!name) { syncMsg('Type your name or business name.'); return; }
+      if (!em || !pw) { syncMsg('Type your email and a password.'); return; }
+      syncMsg('Creating your account…', true);
+      Sync.signUp(em, pw).then(function () {
+        S.settings.profile.name = name; setCountry(country); S.meta.profileSkipped = false;
+        persist(); toast('Welcome, ' + name); render();
+      }, function (e) { syncMsg(e && e.message ? e.message : 'Something went wrong.'); });
+    },
+    gateSignIn: function () { syncAuth('signIn'); },
+    gateLocal: function () {
+      var name = val('gc-name', '').trim(), country = val('gc-country', 'GM');
+      if (!name) { syncMsg('Type your name or business name.'); return; }
+      S.settings.profile.name = name; setCountry(country); S.meta.skipAccount = true; persist(); render();
+    },
+    saveProfileGate: function () {
+      var name = val('gp-name', '').trim(), box = document.getElementById('gp-msg');
+      if (!name) { box.innerHTML = '<div class="form-error">Type your name or business name, or tap Skip for now.</div>'; return; }
+      S.settings.profile.name = name; setCountry(val('gp-country', 'GM')); persist(); render();
+    },
+    skipProfile: function () { S.meta.profileSkipped = true; persist(); render(); },
+    /* ----- PIN, fingerprint and locking ----- */
+    pinKey: function (d) { pinPress(d.k); },
+    pinDel: function () { if (gateState() === 'lock') UI.pin = UI.pin.slice(0, -1); else UI.pinBuf = UI.pinBuf.slice(0, -1); render(); },
+    pinNext: function () {
+      if (UI.pinBuf.length < 4) return;
+      UI.pinFirst = UI.pinBuf; UI.pinBuf = ''; UI.pinStep = 2; UI.pinMsg = ''; render();
+    },
+    pinDone: function () { UI.pinStep = 0; UI.changing = false; UI.locked = false; UI.pinMsg = ''; UI.pinBuf = ''; UI.pinFirst = ''; toast('Your PIN is on'); render(); },
+    pinSkip: function () { S.meta.pinSkipped = true; persist(); render(); },
+    pinCancel: function () { UI.changing = false; UI.pinStep = 0; UI.pinBuf = ''; UI.pinFirst = ''; UI.pinMsg = ''; render(); },
+    pinChange: function () { UI.changing = true; UI.pinBuf = ''; UI.pinFirst = ''; UI.pinMsg = ''; UI.pinStep = Security.enabled() ? 0 : 1; render(); },
+    pinOff: function () {
+      if (!confirm('Turn off the PIN? Anyone who picks up your phone will be able to open your records.')) return;
+      Security.disable().then(function () { S.meta.pinSkipped = true; persist(); toast('PIN turned off'); render(); });
+    },
+    pinBio: function () {
+      Security.unlockBio().then(function () { UI.locked = false; UI.pin = ''; UI.pinMsg = ''; render(); },
+        function () { UI.pinMsg = 'Fingerprint did not work. Type your PIN.'; render(); });
+    },
+    enableBio: function () {
+      Security.enableBio().then(function () { toast('Fingerprint is on'); ACT.pinDone(); }, function () { toast('Could not turn on fingerprint. Your PIN still works.'); ACT.pinDone(); });
+    },
+    bioOn: function () { Security.enableBio().then(function () { toast('Fingerprint is on'); render(); }, function () { toast('Could not turn on fingerprint on this phone.'); }); },
+    bioOff: function () { Security.disableBio().then(function () { toast('Fingerprint is off'); render(); }); },
+    lockNow: function () { UI.locked = true; UI.pin = ''; UI.pinMsg = ''; UI.bioTried = false; UI.stack = [{ v: 'home' }]; render(); },
+    lockForgot: function () { UI.forgot = true; render(); },
+    forgotBack: function () { UI.forgot = false; render(); },
+    forgotReset: function () {
+      var pw = val('gf-pass', ''), box = document.getElementById('gf-msg');
+      if (!pw) { box.innerHTML = '<div class="form-error">Type your password.</div>'; return; }
+      box.innerHTML = '<div class="form-info">Checking…</div>';
+      Sync.signIn(Sync.status().email, pw).then(function () {
+        return Security.disable();
+      }).then(function () { UI.forgot = false; UI.locked = false; UI.changing = true; UI.pinStep = 1; UI.pinBuf = ''; UI.pinMsg = 'Your password is right. Choose a new PIN.'; render(); },
+        function (e) { box.innerHTML = '<div class="form-error">' + esc(e && e.message ? e.message : 'Something went wrong.') + '</div>'; });
+    },
+    lockErase: function () {
+      if (!confirm('Erase everything on this phone and start over? Records that are only on this phone, and not in a backup, will be lost for good.')) return;
+      if (!confirm('Last check: erase all records on this phone?')) return;
+      S = blankState(); applyLocale(); recompute(); Store.set(S);
+      UI.forgot = false; UI.locked = false; UI.stack = [{ v: 'home' }]; render();
+    },
+    passwordContinue: function () {
+      var pw = val('gw-pass', ''), box = document.getElementById('gw-msg');
+      if (!pw) { box.innerHTML = '<div class="form-error">Type your password.</div>'; return; }
+      box.innerHTML = '<div class="form-info">Checking…</div>';
+      Sync.signIn(Sync.status().email, pw).then(function () { render(); },
+        function (e) { box.innerHTML = '<div class="form-error">' + esc(e && e.message ? e.message : 'Something went wrong.') + '</div>'; });
+    },
+    passwordSignOut: function () {
+      if (!confirm('Sign out? Your records are removed from this phone and come back when you sign in again.')) return;
+      Sync.signOut().then(function () { UI.stack = [{ v: 'home' }]; UI.locked = false; render(); });
+    },
+    removeDevice: function (d) {
+      if (!confirm('Remove this phone from your account? It is signed out the next time it connects.')) return;
+      Sync.removeDevice(d.id).then(function () { toast('Phone removed'); var el = document.getElementById('devices'); if (el) el.innerHTML = devicesHTML(); }, function (e) { toast(e && e.message ? e.message : 'Could not remove it.'); });
+    },
+    dismissAlerts: function () { S.meta.deviceAlerts = []; persist(); render(); },
     back: function () { history.back(); },
     go: function (d) { go({ v: d.v }); },
     showMore: function () { UI.limit += 150; if (LISTS[cur().v]) renderList(); else render(); },
-    salesFilter: function (d) { UI.salesFilter = d.v; UI.limit = 120; render(); },
-    salesFilterGo: function (d) { UI.salesFilter = d.v; setTab('sales'); },
+    salesFilterGo: function (d) { UI.hStatus = d.v === 'overdue' ? 'overdue' : 'all'; UI.hType = 'all'; UI.hRange = 'all'; UI.hQuery = ''; UI.hChannel = ''; setTab('history'); },
     custFilter: function (d) { UI.custFilter = d.v; render(); },
     custFilterGo: function (d) { UI.custFilter = d.v; setTab('customers'); },
     openCustomer: function (d) { go({ v: 'customer', key: d.key }); },
@@ -1344,41 +2067,37 @@
       Array.prototype.forEach.call(field.querySelectorAll('.dchip'), function (b) { b.classList.toggle('on', b === el); });
       var note = field.querySelector('.datenote'); if (note) note.remove();
       var fe = document.getElementById('form-error'); if (fe && /Date/.test(fe.textContent)) fe.innerHTML = '';
-      if (d.v === 'today') { inp.value = R.today; inp.classList.add('hide-date'); }
-      else if (d.v === 'yesterday') { inp.value = addDays(R.today, -1); inp.classList.add('hide-date'); }
-      else { inp.classList.remove('hide-date'); inp.focus(); try { if (inp.showPicker) inp.showPicker(); } catch (e) {} }
+      var ti = document.querySelector('#sheetwrap [name=time]');
+      if (d.v === 'today') { inp.value = R.today; inp.classList.add('hide-date'); if (ti && !ti.value && !field.closest('#batch-top')) { ti.value = nowTime(); ti.dataset.auto = '1'; } }
+      else if (d.v === 'yesterday') { inp.value = addDays(R.today, -1); inp.classList.add('hide-date'); if (ti && ti.dataset.auto) { ti.value = ''; delete ti.dataset.auto; } }
+      else { inp.classList.remove('hide-date'); if (ti && ti.dataset.auto) { ti.value = ''; delete ti.dataset.auto; } inp.focus(); try { if (inp.showPicker) inp.showPicker(); } catch (e) {} }
       if (field.closest('#batch-top')) batchDateChanged(inp.value);
       refreshForm();
     },
-    setNet: function (d, el) {
-      var inp = el.closest('.field').querySelector('input'), core = C.gmCore(inp.value);
-      inp.value = d.v ? d.v + core : core; updateNet(inp);
-      if (FORM) { autofill(inp); refreshForm(); }
-    },
     setLimit: function (d) {
       var rk = riskFor(d.key); if (!rk) return;
-      var ans = prompt('Credit limit for ' + (rk.name || 'this customer') + ', in dalasi. Type 0 for no credit.\nSuggested: ' + money(rk.suggested) + '. Leave it empty to use the suggestion.', rk.manual !== null ? String(rk.manual) : '');
+      var ans = prompt('Credit limit for ' + (rk.name || 'this customer') + ', in ' + sym() + '. Type 0 for no credit.\nSuggested: ' + money(rk.suggested) + '. Leave it empty to use the suggestion.', rk.manual !== null ? String(rk.manual) : '');
       if (ans === null) return;
       if (String(ans).trim() === '') delete S.limits[d.key];
       else { var v = parseFloat(String(ans).replace(/,/g, '')); if (!(v >= 0)) { toast('Type a number, for example 500.'); return; } S.limits[d.key] = v; }
       persist().then(function () { toast('Credit limit saved'); }); render();
     },
-    openBatch: function () { openBatch(); },
+    openBatch: function (d) { openBatch(d && d.mode); },
     batchKind: function (d, el) {
       UI.batchKind = d.v; Array.prototype.forEach.call(el.parentNode.children, function (b) { b.classList.toggle('on', b === el); });
       document.getElementById('b-ex-wrap').classList.toggle('hide', d.v !== 'WE');
     },
     batchAdd: function () {
       var box = document.getElementById('batch-rows'), n = box.querySelectorAll('.batch-row').length;
-      box.insertAdjacentHTML('beforeend', batchRow(n));
-      var last = box.lastElementChild; last.scrollIntoView({ block: 'start' }); last.querySelector('.b-phone').focus();
+      box.insertAdjacentHTML('beforeend', batchRowHTML(n));
+      var last = box.lastElementChild; last.scrollIntoView({ block: 'start' }); var first = last.querySelector('.b-phone, .b-agent'); if (first) first.focus();
     },
     batchRemove: function (d, el) { el.closest('.batch-row').remove(); renumberBatch(); },
     batchSave: function () { batchSave(); },
     newSaleFor: function (d) { var c = findCustomer(d.key); openForm('sale', null, { prefill: c ? { name: c.name, phone: c.phone } : {} }); },
     editSale: function (d) {
       var r = findRec('sales', d.id); if (!r) return;
-      openForm(C.has(r.billed) && num(r.billed) === 0 && r.details === 'Payment received' ? 'payment' : 'sale', r);
+      openForm(C.isPay(r) ? 'payment' : 'sale', r);
     },
     newAgent: function () { openForm('agent', null); },
     newAgentFor: function (d) { var a = findAgent(d.key); openForm('agent', null, { prefill: a ? { name: a.name, phone: a.phone, type: a.type || 'Regular Agent' } : {} }); },
@@ -1391,10 +2110,8 @@
     editEvc: function (d) { var r = findRec('evc', d.id); if (r) openForm('evc', r); },
     newError: function () { openForm('error', null); },
     editError: function (d) { var r = findRec('errors', d.id); if (r) openForm('error', r); },
-    newCapital: function () { openCapital(null); },
+    newCapital: function (d) { openCapital(null, d && d.date); },
     editCapital: function (d) { var r = findRec('capital', d.id); if (r) openCapital(r); },
-    editDaily: function (d) { openForm('daily', S.daily[d.date] || null, { date: d.date, title: 'Cash check, ' + shortDate(d.date), prefill: S.daily[d.date] || {} }); },
-    editRecon: function (d) { openForm('recon', S.recon[d.month] || null, { month: d.month, title: 'Reconcile ' + monthName(d.month), prefill: S.recon[d.month] || { status: 'Pending' } }); },
     closeSheet: function () { closeSheet(); },
     saveForm: function () { saveForm(false); },
     deleteRec: function () {
@@ -1406,7 +2123,7 @@
     recordPayment: function () {
       var rec = FORM && FORM.rec; if (!rec) return;
       var cs = R.sales.filter(function (x) { return x.id === rec.id; })[0];
-      var ans = prompt('How much did they pay now? (D)', cs ? String(cs.remaining) : '');
+      var ans = prompt('How much did they pay now? (' + sym() + ')', cs ? String(cs.remaining) : '');
       if (ans === null) return;
       var amt = parseFloat(String(ans).replace(/,/g, ''));
       if (!isFinite(amt) || amt <= 0) { toast('Type an amount greater than 0.'); return; }
@@ -1460,12 +2177,12 @@
     importBackup: function () { document.getElementById('importFile').click(); },
     exportCsv: function () { exportCsv(); },
     saveSettings: function () {
-      S.settings.countryCode = document.getElementById('set-cc').value.trim();
       SETTING_LISTS.forEach(function (l) {
-        var v = document.getElementById('set-' + l[0]).value.split('\n').map(function (x) { return x.trim(); }).filter(Boolean);
+        var el = document.getElementById('set-' + l[0]); if (!el) return;
+        var v = el.value.split('\n').map(function (x) { return x.trim(); }).filter(Boolean);
         if (v.length) S.settings[l[0]] = v;
       });
-      persist().then(function () { toast('Settings saved'); }); render();
+      persist().then(function () { toast('Your choices are saved'); }); render();
     },
     copyRules: function () { copyText(RULES); },
     syncSaveConfig: function () {
@@ -1519,7 +2236,8 @@
   }
   function backupFile() {
     var name = 'agent-client-tracker-backup-' + R.today + '.json';
-    return { blob: new Blob([JSON.stringify(S)], { type: 'application/json' }), name: name };
+    var copy = Object.assign({}, S, { meta: { lastBackup: S.meta.lastBackup } });
+    return { blob: new Blob([JSON.stringify(copy)], { type: 'application/json' }), name: name };
   }
   function markBackedUp() { S.meta.lastBackup = R.today; persist(); render(); toast('Backup saved'); }
   function download(blob, name) {
@@ -1540,6 +2258,7 @@
 
   /* ================= Events ================= */
   function renderList() { var el = document.getElementById('list'); if (el && LISTS[cur().v]) el.innerHTML = LISTS[cur().v](); }
+  function saveLocalOnly() { return Store.set(S); }
   document.addEventListener('click', function (e) {
     var el = e.target.closest('[data-act]'); if (!el) return;
     var a = ACT[el.dataset.act]; if (!a) return;
@@ -1547,13 +2266,14 @@
   });
   document.addEventListener('input', function (e) {
     var t = e.target;
-    if (t.id === 'q-sales') { UI.salesQuery = t.value; UI.limit = 120; renderList(); return; }
+    if (t.id === 'q-hist') { UI.hQuery = t.value; UI.limit = 120; renderList(); return; }
     if (t.id === 'q-cust') { UI.custQuery = t.value; renderList(); return; }
     if (t.id === 'q-agents') { UI.agentQuery = t.value; UI.limit = 120; renderList(); return; }
     if (t.id === 'msg') { UI.shareText = t.value; return; }
-    if (t.type === 'tel' && t.closest('#sheetwrap')) updateNet(t);
+    if (t.type === 'tel' && t.closest('.field')) updateNet(t);
     if (t.classList.contains('b-phone')) {
-      var row = t.closest('.batch-row'), nm = row.querySelector('.b-name'), cu = findCustomer(C.custKey({ phone: t.value }));
+      var row = t.closest('.batch-row'), nm = row.querySelector('.b-name'), p = telParse(t);
+      var cu = p.ok && !p.empty ? findCustomer(C.custKey({ phone: p.value })) : null;
       if (cu && !nm.value) nm.value = cu.name;
     }
     if (FORM && t.closest('#sheetwrap')) { autofill(t); refreshForm(); }
@@ -1562,25 +2282,38 @@
     var t = e.target;
     if (t.id === 'share-who') { UI.shareKey = t.value; UI.shareText = ''; render(); return; }
     if (t.id === 'importFile') { importFile(t.files && t.files[0]); t.value = ''; return; }
-    if (t.type === 'tel' && t.closest('#sheetwrap') && t.value) {
-      var nv = C.gmNormalize(t.value);
-      if (nv && nv !== t.value.replace(/\D/g, '') && C.gmDigits(t.value).length === 7) toast('Changed to the new 9-digit number');
-      if (nv) t.value = nv; updateNet(t);
-    }
+    if (t.id === 'h-status') { UI.hStatus = t.value; UI.limit = 120; render(); return; }
+    if (t.id === 'h-chan') { UI.hChannel = t.value; UI.limit = 120; render(); return; }
+    if (t.id === 'h-from') { UI.hFrom = t.value; UI.limit = 120; render(); return; }
+    if (t.id === 'h-to') { UI.hTo = t.value; UI.limit = 120; render(); return; }
+    if (t.id === 'sec-lock') { Security.cfg().lockAfter = t.value; saveLocalOnly(); toast('Saved'); return; }
+    if (t.id === 'sec-exp') { Security.cfg().expireDays = Number(t.value); saveLocalOnly(); toast('Saved'); return; }
+    if (t.type === 'tel' && t.closest('.field')) tidyTel(t);
+    if (t.classList.contains('ccsel')) updateNet(t);
     if (t.type === 'date' && t.closest('.datefield')) {
       var f = t.closest('.datefield'), other = f.querySelector('.dchip[data-v=other] small');
       if (other && t.value) other.textContent = dayShort(t.value);
       if (f.closest('#batch-top')) batchDateChanged(t.value);
+      else { var ti = document.querySelector('#sheetwrap [name=time]'); if (ti && ti.dataset.auto && t.value !== R.today) { ti.value = ''; delete ti.dataset.auto; } }
     }
     if (t.classList.contains('b-date')) t.dataset.touched = '1';
-    if (t.classList.contains('b-paid')) t.closest('.batch-row').querySelector('.b-recv-wrap').classList.toggle('hide', t.checked);
+    if (t.classList.contains('b-pay')) t.closest('.batch-row').querySelector('.b-recv-wrap').classList.toggle('hide', t.value !== 'part');
+    if (t.id === 'b-chan') document.getElementById('b-chan-other').classList.toggle('hide', t.value !== '__other');
     if (FORM && t.closest('#sheetwrap')) { autofill(t); refreshForm(); }
+  });
+  document.addEventListener('keydown', function (e) {
+    var g = gateState(); if (g !== 'lock' && g !== 'pinsetup') return;
+    if (/^[0-9]$/.test(e.key)) { e.preventDefault(); pinPress(e.key); }
+    else if (e.key === 'Backspace') { e.preventDefault(); ACT.pinDel(); }
   });
   function autofill(t) {
     var sheet = document.getElementById('sheetwrap');
-    function set(name, val) { var el = sheet.querySelector('[name="' + name + '"]'); if (el && !el.value && val) el.value = val; }
+    function set(name, val) {
+      var el = sheet.querySelector('[name="' + name + '"]'); if (!el || !val) return;
+      if (el.type === 'tel') { if (!el.value) setTel(telBox(el), val); } else if (!el.value) el.value = val;
+    }
     if (FORM.type === 'sale' || FORM.type === 'payment') {
-      if (t.name === 'phone') { var c = findCustomer(C.custKey({ phone: t.value })); if (c) set('name', c.name); }
+      if (t.name === 'phone') { var p = telParse(t), c = p.ok && !p.empty ? findCustomer(C.custKey({ phone: p.value })) : null; if (c) set('name', c.name); }
       if (t.name === 'name') {
         var nm = t.value.trim().toLowerCase(), hits = R.customers.filter(function (c) { return c.name.toLowerCase() === nm; });
         if (hits.length === 1) set('phone', hits[0].phone);
@@ -1593,6 +2326,10 @@
       var prev = R.referrals.rows.filter(function (r) { return C.agentKey(r.agent) === C.agentKey(t.value); }).slice(-1)[0];
       if (prev) set('agentPhone', prev.agentPhone);
     }
+    if (FORM.type === 'evc' && t.name === 'provider') {
+      var last = lastEvcFor(t.value);
+      if (last) ['rate', 'retailRoy', 'wholesaleRoy'].forEach(function (k) { var el = sheet.querySelector('[name="' + k + '"]'); if (el && el.value === '' && last[k] !== '' && last[k] != null) el.value = last[k]; });
+    }
   }
   function importFile(file) {
     if (!file) return;
@@ -1603,35 +2340,78 @@
       if (!obj || !Array.isArray(obj.sales)) { toast('That file is not a backup from this app.'); return; }
       var msg = 'Restore this file?\n\nIt has ' + obj.sales.length + ' sales and ' + ((obj.agents || []).length) + ' agent entries.\n\nIt will REPLACE everything currently in the app' + (window.Sync && Sync.status().signedIn ? ', and your online records too.' : '.');
       if (!confirm(msg)) return;
-      var keepBackup = S.meta.lastBackup, keepFb = S.meta.firebase, keepPend = S.meta.pending;
-      S = normalize(obj); S.meta.lastBackup = S.meta.lastBackup || keepBackup;
-      if (keepFb) S.meta.firebase = keepFb; else delete S.meta.firebase;
-      S.meta.pending = keepPend || {};
+      var keep = { lastBackup: S.meta.lastBackup, firebase: S.meta.firebase, pending: S.meta.pending, security: S.meta.security, ownerUid: S.meta.ownerUid,
+        sync: S.meta.sync, hideAmounts: S.meta.hideAmounts, pinSkipped: S.meta.pinSkipped, knownDevices: S.meta.knownDevices, devSince: S.meta.devSince,
+        skipAccount: S.meta.skipAccount, profileSkipped: S.meta.profileSkipped, lastChannel: S.meta.lastChannel, deviceAlerts: S.meta.deviceAlerts };
+      var mine = S.settings.profile;
+      S = normalize(obj); S.meta = Object.assign({ lastBackup: null }, S.meta);
+      Object.keys(keep).forEach(function (k) { if (keep[k] !== undefined) S.meta[k] = keep[k]; else delete S.meta[k]; });
+      if (!S.meta.pending) S.meta.pending = {};
+      if (!S.settings.profile.name && mine && mine.name) S.settings.profile = mine;
+      applyLocale(); migrate();
       persist().then(function () { toast('Records restored'); });
       setTab('home');
     };
     reader.readAsText(file);
   }
-  document.addEventListener('visibilitychange', function () { if (!document.hidden && !UI.sheetOpen) { recompute(); render(); } });
+  /* The app hides itself when you switch away, and locks again after the time you chose. */
+  var cover = null;
+  function showCover() {
+    if (cover || !(window.Security && Security.enabled())) return;
+    cover = document.createElement('div'); cover.id = 'privacy-cover';
+    cover.innerHTML = '<div><img src="icon-192.png" alt="" width="72" height="72"><p>' + esc(APP_NAME) + '</p></div>';
+    document.body.appendChild(cover);
+  }
+  function hideCover() { if (cover) { cover.remove(); cover = null; } }
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { UI.hiddenAt = Date.now(); showCover(); return; }
+    hideCover();
+    if (Security.enabled() && !UI.locked && UI.hiddenAt) {
+      var delay = Security.lockDelayMs();
+      if (delay !== Infinity && Date.now() - UI.hiddenAt >= delay) { UI.locked = true; UI.pin = ''; UI.pinMsg = ''; UI.bioTried = false; render(); return; }
+    }
+    if (!UI.sheetOpen) { recompute(); render(); }
+  });
+  window.addEventListener('pagehide', showCover);
+  window.addEventListener('pageshow', function () { if (!document.hidden) hideCover(); });
 
   /* ================= Start ================= */
+  function onSyncStatus(s) {
+    updateSyncBadge(s);
+    var g = gateState();
+    if (g !== UI.lastGate && !UI.sheetOpen) render();
+  }
   history.replaceState({ n: 1 }, '');
   Store.get().then(function (saved) {
-    S = normalize(saved); recompute(); render();
+    S = normalize(saved); applyLocale();
+    Security.init({ getS: function () { return S; }, saveLocal: function () { return Store.set(S); } });
+    UI.locked = Security.enabled();
+    Security.bioSupported().then(function (ok) { UI.bioOK = ok; });
+    recompute(); render();
     if (window.Sync) Sync.init({
       getS: function () { return S; },
       saveLocal: function () { recompute(); return Store.set(S); },
-      refresh: function () { if (UI.sheetOpen) UI.pendingRender = true; else { var typing = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName); if (typing && LISTS[cur().v]) renderList(); else if (!typing) render(); else UI.pendingRender = true; } },
-      onStatus: updateSyncBadge,
-      resetLocal: function () { S = blankState(); recompute(); Store.set(S); return S; },
+      refresh: function () {
+        applyLocale(); recompute();
+        if (UI.sheetOpen || gateState()) { UI.pendingRender = true; return; }
+        var typing = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+        if (typing && LISTS[cur().v]) renderList(); else if (!typing) render(); else UI.pendingRender = true;
+      },
+      onStatus: onSyncStatus,
+      resetLocal: function () { S = blankState(); applyLocale(); recompute(); Store.set(S); UI.locked = false; return S; },
       onAuth: function (signedIn) {
         // Redraw only when sign-in status really changes, so typing is never wiped.
         var first = UI.lastAuth === undefined, changed = UI.lastAuth !== signedIn;
         UI.lastAuth = signedIn;
         if (!changed || (first && !signedIn)) return;
         if (UI.sheetOpen) UI.pendingRender = true; else render();
+      },
+      onDevices: function () { var el = document.getElementById('devices'); if (el) el.innerHTML = devicesHTML(); },
+      onRevoked: function () {
+        Sync.signOut().then(function () { UI.stack = [{ v: 'home' }]; UI.locked = false; toast('This phone was removed from the account.'); render(); });
       }
     });
+    if (migrate()) persist();
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
   });
   if ('serviceWorker' in navigator) {
@@ -1641,5 +2421,5 @@
     });
     window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
   }
-  window.__app = { state: function () { return S; }, results: function () { return R; } };
+  window.__app = { state: function () { return S; }, results: function () { return R; }, ui: UI, gate: gateState, acts: function () { return Object.keys(ACT); }, views: function () { return Object.keys(VIEWS); } };
 })();

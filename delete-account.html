@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#CE1126">
+  <meta name="theme-color" content="#1E3A8A">
   <title>Delete your account: Agent &amp; Client Tracker</title>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -45,9 +45,9 @@
         ready.then(function () {
           var fb = window.firebase, app = fb.apps.length ? fb.app() : fb.initializeApp(c.firebase), auth = app.auth(), db = app.firestore();
           return auth.signInWithEmailAndPassword(em, pw).then(function (cr) {
-            var u = cr.user, col = db.collection('users').doc(u.uid).collection('records');
-            return col.get().then(function (snap) {
-              var refs = snap.docs.map(function (d) { return d.ref; }), jobs = [];
+            var u = cr.user, me = db.collection('users').doc(u.uid);
+            return Promise.all([me.collection('records').get(), me.collection('devices').get()]).then(function (snaps) {
+              var refs = snaps[0].docs.concat(snaps[1].docs).map(function (d) { return d.ref; }), jobs = [];
               for (var i = 0; i < refs.length; i += 400) { var b = db.batch(); refs.slice(i, i + 400).forEach(function (r) { b['delete'](r); }); jobs.push(b.commit()); }
               return Promise.all(jobs);
             }).then(function () { return u['delete'](); });

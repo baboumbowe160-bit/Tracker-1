@@ -5,10 +5,11 @@
 (function (g) {
   'use strict';
   var SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
-  var COLLS = ['sales', 'agents', 'referrals', 'walletComm', 'evc', 'capital', 'errors'];
+  var COLLS = ['sales', 'agents', 'referrals', 'walletComm', 'evc', 'capital', 'errors', 'expenses'];
   var host = null, cfg = null, db = null, auth = null, user = null, unsub = null;
   var lastDocs = {}, inFlight = {}, firstServerSnap = false, flushTimer = null, ver = 0, booting = false, managed = false;
   var st = { phase: 'off', error: '', snapPending: false, lastSynced: null, email: '' };
+  var devs = [], unsubDev = null, explicitSignIn = false;
 
   /* ---------- helpers ---------- */
   function stable(v) {
@@ -178,6 +179,59 @@
   }
   function stopListen() { if (unsub) { try { unsub(); } catch (e) {} } unsub = null; }
 
+  /* ---------- this phone, and the other phones signed in to the account ---------- */
+  function deviceId() {
+    try { var d = localStorage.getItem('act-device-id'); if (!d) { d = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); localStorage.setItem('act-device-id', d); } return d; }
+    catch (e) { return 'd-unknown'; }
+  }
+  function deviceName() {
+    var ua = navigator.userAgent || '';
+    var os = /iPhone|iPad/.test(ua) ? 'iPhone' : /Android/.test(ua) ? 'Android phone' : /Windows/.test(ua) ? 'Windows computer' : /Mac OS X/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux computer' : 'Phone';
+    var br = /Edg\//.test(ua) ? 'Edge' : /SamsungBrowser/.test(ua) ? 'Samsung Internet' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : '';
+    var m = ua.match(/Android [\d.]+; ([^;)]+)/), model = m && m[1] && m[1].trim().length > 1 ? m[1].trim() : '';
+    return (model || os) + (br ? ' · ' + br : '');
+  }
+  function devCol() { return db.collection('users').doc(user.uid).collection('devices'); }
+  function msOf(x) { return x && typeof x.toMillis === 'function' ? x.toMillis() : 0; }
+  function stopDevices() { if (unsubDev) { try { unsubDev(); } catch (e) {} } unsubDev = null; devs = []; }
+  // A removed phone stays removed, even if it still has a saved sign-in. Only typing the password again brings it back.
+  function registerDevice() {
+    var ref = devCol().doc(deviceId()), ts = g.firebase.firestore.FieldValue.serverTimestamp(), typed = explicitSignIn;
+    explicitSignIn = false;
+    return ref.get().then(function (snap) {
+      var base = { name: deviceName(), last: ts };
+      if (!snap.exists) return ref.set(Object.assign({ first: ts, revoked: false }, base));
+      var d = snap.data() || {};
+      if (d.revoked) { if (typed) return ref.set(Object.assign({ first: ts, revoked: false }, base)); if (host.onRevoked) host.onRevoked(); return null; }
+      return ref.update(base);
+    })['catch'](function () {});
+  }
+  function listenDevices() {
+    stopDevices();
+    unsubDev = devCol().onSnapshot(function (snap) {
+      devs = snap.docs.map(function (d) {
+        var x = d.data() || {};
+        return { id: d.id, name: x.name || 'Phone', first: msOf(x.first), last: msOf(x.last), revoked: !!x.revoked, me: d.id === deviceId() };
+      });
+      var mine = devs.filter(function (d) { return d.me; })[0];
+      if (mine && mine.revoked && !explicitSignIn) { if (host.onRevoked) host.onRevoked(); return; }
+      if (!snap.metadata.fromCache) {
+        var S = host.getS(), maxFirst = devs.reduce(function (m, d) { return Math.max(m, d.first); }, 0), changed = false;
+        if (!S.meta.devSince) { S.meta.devSince = maxFirst || Date.now(); changed = true; }
+        else {
+          devs.filter(function (d) { return !d.me && !d.revoked && d.first > S.meta.devSince; }).forEach(function (d) {
+            var list = S.meta.deviceAlerts || (S.meta.deviceAlerts = []);
+            if (!list.some(function (a) { return a.id === d.id && a.at === d.first; })) { list.push({ id: d.id, name: d.name, at: d.first }); changed = true; }
+          });
+          if (maxFirst > S.meta.devSince) { S.meta.devSince = maxFirst; changed = true; }
+        }
+        if (changed) host.saveLocal();
+        if (changed && host.refresh) host.refresh();
+      }
+      if (host.onDevices) host.onDevices();
+    }, function () {});
+  }
+
   /* ---------- loading Firebase ---------- */
   function loadScript(src) {
     return new Promise(function (res, rej) {
@@ -208,7 +262,7 @@
           if (S.meta.ownerUid !== u.uid) { S.meta.ownerUid = u.uid; S.meta.skipAccount = false; host.saveLocal(); }
         }
         st.phase = u ? 'on' : 'signin';
-        if (u) listen(); else stopListen();
+        if (u) { listen(); registerDevice().then(listenDevices); } else { stopListen(); stopDevices(); }
         emit();
         if (host.onAuth) host.onAuth(!!u);
       });
@@ -227,8 +281,9 @@
     else if (!online) { label = n ? 'Offline, ' + n + ' to sync' : 'Offline, saved on phone'; }
     else if (n || st.snapPending || !firstServerSnap) { label = 'Syncing'; }
     else { label = 'Synced'; tone = 'credit'; }
+    var ready = !!user && (firstServerSnap || !!(S && S.meta.sync && S.meta.sync.uid === user.uid && S.meta.sync.sinceAt));
     return { configured: !!cfg, managed: managed, phase: st.phase, label: label, tone: tone, email: st.email, pending: n,
-      error: st.error, lastSynced: st.lastSynced, signedIn: !!user };
+      error: st.error, lastSynced: st.lastSynced, signedIn: !!user, ready: ready };
   }
 
   /* ---------- setup and sign-in ---------- */
@@ -267,8 +322,23 @@
       var done = function () { location.reload(); };
       if (auth) auth.signOut().then(done, done); else done();
     },
-    signUp: function (email, pw) { return needAuth() || auth.createUserWithEmailAndPassword(email, pw)['catch'](function (e) { throw { message: friendly(e) }; }); },
-    signIn: function (email, pw) { return needAuth() || auth.signInWithEmailAndPassword(email, pw)['catch'](function (e) { throw { message: friendly(e) }; }); },
+    signUp: function (email, pw) {
+      var bad = needAuth(); if (bad) return bad;
+      explicitSignIn = true;
+      return auth.createUserWithEmailAndPassword(email, pw).then(function (r) { if (g.Security) g.Security.markPassword(); return r; },
+        function (e) { explicitSignIn = false; throw { message: friendly(e) }; });
+    },
+    signIn: function (email, pw) {
+      var bad = needAuth(); if (bad) return bad;
+      explicitSignIn = true;
+      return auth.signInWithEmailAndPassword(email, pw).then(function (r) { if (g.Security) g.Security.markPassword(); return r; },
+        function (e) { explicitSignIn = false; throw { message: friendly(e) }; });
+    },
+    devices: function () { return devs.filter(function (d) { return !d.revoked; }).sort(function (a, b) { return b.last - a.last; }); },
+    removeDevice: function (id) {
+      if (!db || !user) return Promise.reject({ message: 'Sign in first.' });
+      return devCol().doc(id).update({ revoked: true })['catch'](function (e) { throw { message: friendly(e) }; });
+    },
     resetPassword: function (email) { return needAuth() || auth.sendPasswordResetEmail(email)['catch'](function (e) { throw { message: friendly(e) }; }); },
     signOut: function () {
       if (!auth) return Promise.resolve();
@@ -280,10 +350,10 @@
       if (!auth || !user) return Promise.reject({ message: 'Sign in first.' });
       var u = user, cred = g.firebase.auth.EmailAuthProvider.credential(u.email, pw);
       return u.reauthenticateWithCredential(cred).then(function () {
-        stopListen();
-        return recCol().get();
-      }).then(function (snap) {
-        var refs = snap.docs.map(function (d) { return d.ref; }), commits = [];
+        stopListen(); stopDevices();
+        return Promise.all([recCol().get(), devCol().get()]);
+      }).then(function (snaps) {
+        var refs = snaps[0].docs.concat(snaps[1].docs).map(function (d) { return d.ref; }), commits = [];
         for (var i = 0; i < refs.length; i += 400) {
           var b = db.batch();
           refs.slice(i, i + 400).forEach(function (r) { b['delete'](r); });
