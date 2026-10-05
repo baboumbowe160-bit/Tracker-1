@@ -9,24 +9,28 @@
   var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function money(v) { return C.fm(v); }
-  function sym() { return C.fm(0).replace(/0$/, ''); }
+  function sym() { return C.cur(); }
   function compact(v) {
-    var n = num(v), a = Math.abs(n);
-    var s = a >= 1e6 ? (a / 1e6).toFixed(a >= 1e7 ? 0 : 1) + 'm' : a >= 1e3 ? (a / 1e3).toFixed(a >= 1e4 ? 0 : 1) + 'k' : String(Math.round(a));
-    return (n < 0 ? '-' : '') + sym() + s;
+    return I18N.compact(num(v), sym());
   }
   function pad2(n) { return String(n).padStart(2, '0'); }
   function nowTime() { var t = new Date(); return pad2(t.getHours()) + ':' + pad2(t.getMinutes()); }
   function fmtTime(t) { return t || ''; }
-  function stamp(ms) { if (!ms) return ''; var t = new Date(ms); return t.getDate() + ' ' + MONTHS[t.getMonth()].slice(0, 3) + ' ' + t.getFullYear() + ', ' + pad2(t.getHours()) + ':' + pad2(t.getMinutes()); }
+  function stamp(ms) { return I18N.fmt.stamp(ms); }
+
   function parts(s) { var p = String(s).split('-').map(Number); return { y: p[0], m: p[1], d: p[2] }; }
   function ord(d) { var j = d % 10, k = d % 100; return d + (k >= 11 && k <= 13 ? 'th' : j === 1 ? 'st' : j === 2 ? 'nd' : j === 3 ? 'rd' : 'th'); }
-  function readable(s) { if (!s) return ''; var p = parts(s); return ord(p.d) + ' ' + MONTHS[p.m - 1] + ' ' + p.y; }
-  function shortDate(s) { if (!s) return ''; var p = parts(s); return p.d + ' ' + MONTHS[p.m - 1].slice(0, 3) + ' ' + p.y; }
-  function dayHead(s) { var p = parts(s); return DAYS[new Date(Date.UTC(p.y, p.m - 1, p.d)).getUTCDay()] + ', ' + ord(p.d) + ' ' + MONTHS[p.m - 1]; }
+  function readable(s) { return I18N.fmt.readable(s); }
+
+  function shortDate(s) { return I18N.fmt.short(s); }
+
+  function dayHead(s) { return I18N.fmt.dayHead(s); }
+
   function addDays(s, n) { var p = parts(s), t = new Date(Date.UTC(p.y, p.m - 1, p.d + n)); return t.getUTCFullYear() + '-' + String(t.getUTCMonth() + 1).padStart(2, '0') + '-' + String(t.getUTCDate()).padStart(2, '0'); }
-  function dayShort(s) { var p = parts(s); return DAYS[new Date(Date.UTC(p.y, p.m - 1, p.d)).getUTCDay()].slice(0, 3) + ' ' + p.d + ' ' + MONTHS[p.m - 1].slice(0, 3); }
-  function monthName(m) { if (!m) return ''; var p = m.split('-').map(Number); return MONTHS[p[1] - 1] + ' ' + p[0]; }
+  function dayShort(s) { return I18N.fmt.dayShort(s); }
+
+  function monthName(m) { return I18N.fmt.month(m); }
+
   function uid() { return 'id' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
   /* ================= Data ================= */
@@ -154,7 +158,7 @@
     agentQuery: '', limit: 120, commTab: 'wallet', refTab: 'sales', shareType: 'Customer', shareKey: '', shareText: '',
     hType: 'all', hRange: 'all', hStatus: 'all', hChannel: '', hQuery: '', hFrom: '', hTo: '',
     locked: false, pin: '', pinBuf: '', pinFirst: '', pinStep: 0, pinMsg: '', changing: false, forgot: false, gName: '', gCountry: 'GM', gateTab: 'create', bioOK: false };
-  var TITLES = { home: APP_NAME, agents: 'Agents', customers: 'Customers', history: 'History', settings: 'Settings',
+  var TITLES = { reports: 'Reports', language: 'Language', home: APP_NAME, agents: 'Agents', customers: 'Customers', history: 'History', settings: 'Settings',
     share: 'Send a Reminder', daily: 'Daily Cash Check', recon: 'Monthly Balance Check', losses: 'Losses and Errors',
     comm: 'Commissions', ref: 'Referral Agents', capital: 'Capital Portfolio', backup: 'Backup and Restore',
     choices: 'Your Choices', help: 'How It Works', sync: 'Your Account', risk: 'Risk Check', security: 'Security',
@@ -188,6 +192,8 @@
     account: '<circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c1-3.6 3.8-5.5 7-5.5s6 1.9 7 5.5"/>',
     privacy: '<path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
     install: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+    chart: '<path d="M4 20h16"/><path d="M7 16v-5M12 16V7M17 16v-8"/>',
+    globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/>',
     history: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
     eye: '<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.8"/>',
     eyeoff: '<path d="M3 3l18 18M10.6 6a9.5 9.5 0 011.4-.1c6.4 0 10 6.1 10 6.1a17 17 0 01-3.2 3.9M6.6 7.4A16.7 16.7 0 002 12s3.6 6.5 10 6.5c1.5 0 2.9-.3 4.1-.9"/><path d="M9.9 9.9a3 3 0 004.2 4.2"/>',
@@ -249,6 +255,25 @@
   /* ================= Render ================= */
   function managed() { return !!(window.Sync && Sync.status().managed); }
   function signedIn() { return !!(window.Sync && Sync.status().signedIn); }
+  function setLang(v) {
+    S.meta.lang = v; I18N.setPref(v); UI.msgLang = '';
+    saveLocal(); render();
+  }
+  function saveLocal() { return Store.set(S); }
+  function langOptions(sel, withAuto) {
+    var o = withAuto ? [['auto', I18N.t('Phone language') + ' (' + I18N.names[I18N.detect()] + ')']] : [];
+    I18N.supported.forEach(function (k) { o.push([k, I18N.names[k]]); });
+    return o.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === sel ? ' selected' : '') + '>' + esc(x[1]) + '</option>'; }).join('');
+  }
+  function gateInstall() {
+    if (isInstalled()) return '';
+    if (deferredInstall) return '<button class="btn block install-btn" data-act="install">' + icon('install') + '<span>Install the App on This Phone</span></button>';
+    if (isIOS()) return '<p class="hint" style="text-align:center">To install: tap the Share button, then Add to Home Screen.</p>';
+    return '';
+  }
+  function langPicker() {
+    return '<div class="langpick" data-noi18n><span aria-hidden="true">🌐</span><select id="lang-pick" aria-label="Language">' + langOptions(S.meta.lang || 'auto', true) + '</select></div>';
+  }
   function countryOptions(sel) {
     var list = COUNTRIES.list.slice().sort(function (x, y) { return x.iso === 'GM' ? -1 : y.iso === 'GM' ? 1 : x.name.localeCompare(y.name); });
     return list.map(function (c) { return '<option value="' + c.iso + '"' + (c.iso === sel ? ' selected' : '') + '>' + esc(c.name) + ' (+' + c.dial + ')</option>'; }).join('');
@@ -296,16 +321,16 @@
       '<div class="field"><label for="gc-name">Your name or business name</label><input id="gc-name" value="' + esc(UI.gName || '') + '"></div>' +
       '<div class="field"><label for="gc-country">Country</label><select id="gc-country">' + countryOptions(UI.gCountry || 'GM') + '</select></div>' +
       '<div id="sync-msg"></div><button class="btn primary block" data-act="gateLocal">Start using the app</button></div>';
-    return '<div class="gate bright"><div class="gate-brand"><img src="icon-192.png" alt="" width="92" height="92"><h1>' + esc(APP_NAME) + '</h1>' +
+    return '<div class="gate bright">' + langPicker() + '<div class="gate-brand"><img src="icon-192.png" alt="" width="92" height="92"><h1>' + esc(APP_NAME) + '</h1>' + gateInstall() +
       '<p>Record data sales, wallet transfers and agent deals. Track every debt. Works without internet.</p></div>' + featureList() + note +
       seg('gateTab', tab, [['create', 'Create account'], ['signin', 'Sign in'], ['local', 'This phone only']]) + panel + '</div>';
   }
   function gateProfile() {
     var p = S.settings.profile;
-    return '<div class="gate bright"><div class="gate-brand"><img src="icon-192.png" alt="" width="80" height="80"><h1>Welcome</h1>' +
+    return '<div class="gate bright">' + langPicker() + '<div class="gate-brand"><img src="icon-192.png" alt="" width="80" height="80"><h1>Welcome</h1>' +
       '<p>Tell us who this account belongs to. Your name appears on your home screen.</p></div><div class="card">' +
       '<div class="field"><label for="gp-name">Your name or business name</label><input id="gp-name" autocomplete="organization" value="' + esc(p.name) + '"></div>' +
-      '<div class="field"><label for="gp-country">Country</label><select id="gp-country">' + countryOptions(p.country) + '</select><div class="note">Sets your currency, phone numbers and colours. You can change them later.</div></div>' +
+      '<div class="field"><label for="gp-country">Country</label><select id="gp-country">' + countryOptions(p.country) + '</select><div class="note">Sets your currency and how phone numbers are checked. You can change them later.</div></div>' +
       '<div id="gp-msg"></div><button class="btn primary block" data-act="saveProfileGate">Continue</button>' +
       '<button class="btn block" data-act="skipProfile" style="border:0;background:none;color:var(--ink-soft)">Skip for now</button></div>' +
       (S.sales.length || S.agents.length ? '' : '<button class="btn block" data-act="importBackup">I have a backup file to restore</button><input type="file" id="importFile" accept=".json,application/json" hidden>') + '</div>';
@@ -354,6 +379,7 @@
   var GATES = { welcome: gateWelcome, profile: gateProfile, lock: gateLock, pinsetup: gatePin, password: gatePassword, forgot: gateForgot };
   function render() {
     var v = cur(), root = document.getElementById('app'), g = gateState(); UI.lastGate = g;
+    if (!g) markAlive();
     document.body.classList.toggle('hide-amounts', !!S.meta.hideAmounts);
     if (g) {
       if (UI.sheetOpen) removeSheet();
@@ -412,42 +438,74 @@
       tile('blue', 'go', 'capital', 'capital', 'Capital Portfolio', 'Available and working capital') + tile('red', 'go', 'expenses', 'expense', 'Expenses and Money Out', money(R.expenses.total) + ' recorded') +
       tile('red', 'go', 'losses', 'loss', 'Losses and Errors', 'Write-offs and mistakes') + '</div>';
   }
+  function sc(act, ic, label, v) {
+    return '<button class="sc" data-act="' + act + '"' + (v ? ' data-v="' + v + '"' : '') + '><span class="ic">' + icon(ic) + '</span><span>' + esc(label) + '</span></button>';
+  }
+  function tool(act, v, ic, label, badge) {
+    return '<button class="tool" data-act="' + act + '" data-v="' + v + '"><span class="ic">' + icon(ic) + (badge ? '<i class="dot">' + badge + '</i>' : '') + '</span><span>' + esc(label) + '</span></button>';
+  }
   VIEWS.home = function () {
-    var t = R.totals, today = R.today, month = today.slice(0, 7), h = '';
-    var hasData = S.sales.length || S.agents.length, name = S.settings.profile.name;
+    var t = R.totals, today = R.today, h = '', name = S.settings.profile.name;
+    var hasData = S.sales.length || S.agents.length || S.expenses.length;
     var dayNow = R.daily.filter(function (d) { return d.date === today; })[0] || { count: 0, received: 0 };
-    h += backupBanner() + (typeof deviceBanner === 'function' ? deviceBanner() : '');
+    var ag = { collect: 0, pay: 0, n: 0 };
+    R.agents.balances.forEach(function (x) { if (x.net > 0) { ag.collect += x.net; ag.n++; } else ag.pay -= x.net; });
+    var owing = R.customers.filter(function (c) { return c.owed > 0; }).length;
+    h += installCard() + backupBanner() + deviceBanner();
     h += '<div class="hero"><div class="hello">' + (name ? 'Welcome, <b>' + esc(name) + '</b>' : 'Welcome') + '</div><div class="hdate">' + esc(readable(today)) + '</div>' +
       '<div class="hero-nums"><div><div class="label">Money received today</div><div class="big">' + money(dayNow.received) + '</div></div>' +
       '<div style="text-align:right"><div class="label">Entries today</div><div class="big">' + dayNow.count + '</div></div></div></div>';
-    if (!hasData) h += '<div class="card"><b>Ready when you are</b><p class="hint" style="margin:6px 0 0">Tap New Sale to record your first sale. Everything you record shows up here.</p></div>';
-    h += '<div class="quick">' + qa('green', 'newSale', 'plus', 'New Sale') + qa('green', 'newPayment', 'pay', 'Customer Paid') +
-      qa('blue', 'newAgent', 'agents', 'Agent Entry') + qa('red', 'newExpense', 'expense', 'Money Out') +
-      qa('blue', 'newCapital', 'cash', 'Record Balances') + qa('blue', 'go', 'chat', 'Send Reminder', 'share') + '</div>';
-    var owingCount = R.customers.filter(function (c) { return c.owed > 0; }).length;
-    var agentSplit = { collect: 0, pay: 0 };
-    R.agents.balances.forEach(function (x) { if (x.net > 0) agentSplit.collect += x.net; else agentSplit.pay -= x.net; });
-    h += riskCard();
+    h += '<button class="btn-new" data-act="newSale"><span class="plus">+</span><span>New Sale</span></button>';
+    h += '<div class="shortcuts">' + sc('newPayment', 'pay', 'Payment') + sc('newAgent', 'agents', 'Agent') + sc('newExpense', 'expense', 'Money Out') +
+      sc('newCapital', 'cash', 'Balances') + sc('go', 'chat', 'Reminder', 'share') + '</div>';
+    h += '<div class="owed"><button data-act="custFilterGo" data-v="owing"><span class="lab">To Collect</span><b class="c-owed">' + money(r2(t.owed + ag.collect)) + '</b>' +
+      '<small>' + owing + ' ' + (owing === 1 ? 'customer' : 'customers') + ' · ' + ag.n + ' ' + (ag.n === 1 ? 'agent' : 'agents') + '</small></button>' +
+      '<button data-act="tab" data-v="agents"><span class="lab">To Pay</span><b>' + money(r2(t.credit + ag.pay)) + '</b><small>Agents and advance payments</small></button></div>';
+    var chips = '';
+    if (R.risk.alerts.length) chips += '<button class="chipa warn" data-act="go" data-v="risk">' + icon('risk') + '<span>' + R.risk.alerts.length + (R.risk.alerts.length === 1 ? ' risk alert' : ' risk alerts') + '</span></button>';
+    if (t.overdue) chips += '<button class="chipa" data-act="salesFilterGo" data-v="overdue">' + icon('history') + '<span>' + t.overdue + ' overdue</span></button>';
+    if (chips) h += '<div class="chipline">' + chips + '</div>';
+    if (!hasData) h += '<div class="card"><b>Ready when you are</b><p class="hint" style="margin:6px 0 0">Tap New Sale to start.</p></div>';
+    var recent = histRows().sort(entryNewer).slice(0, 4);
+    if (recent.length) h += '<div class="sec-head"><b>Recent</b><button data-act="tab" data-v="history">See all</button></div><div class="recent">' + recent.map(entryRow).join('') + '</div>';
+    var rk = R.risk.summary;
+    h += '<div class="sec-head"><b>Tools</b></div><div class="toolgrid">' +
+      tool('tab', 'history', 'history', 'History') + tool('tab', 'customers', 'customers', 'Customers') + tool('tab', 'agents', 'agents', 'Agents') +
+      tool('go', 'risk', 'risk', 'Risk', rk.high || '') + tool('go', 'share', 'chat', 'Reminders') + tool('go', 'daily', 'cash', 'Cash Check') +
+      tool('go', 'recon', 'recon', 'Monthly Check') + tool('go', 'capital', 'capital', 'Capital') + tool('go', 'comm', 'comm', 'Commissions') +
+      tool('go', 'ref', 'customers', 'Referrals') + tool('go', 'expenses', 'expense', 'Money Out') + tool('go', 'losses', 'loss', 'Losses') +
+      tool('go', 'reports', 'chart', 'Reports') + '</div>';
+    return h;
+  };
+  VIEWS.reports = function () {
+    var t = R.totals, month = R.today.slice(0, 7), h = '';
     var lossM = (R.losses.byMonth.filter(function (x) { return x.month === month; })[0] || {}).amount || 0;
     var commM = (R.commMonths.filter(function (x) { return x.month === month; })[0] || {}).total || 0;
     var mNow = R.months.filter(function (x) { return x.month === month; })[0] || { tips: 0, billed: 0, paid: 0 };
     h += '<div class="figures">' +
-      '<button class="figure" data-act="custFilterGo" data-v="owing" style="text-align:left"><div class="label">To Collect from Customers</div><div class="big c-owed">' + money(t.owed) + '</div><div class="sub">' + owingCount + ' customer' + (owingCount === 1 ? '' : 's') + '</div></button>' +
-      '<button class="figure" data-act="custFilterGo" data-v="credit" style="text-align:left"><div class="label">Paid in Advance</div><div class="big c-credit">' + money(t.credit) + '</div><div class="sub">Used on their next purchases</div></button>' +
-      '<button class="figure" data-act="tab" data-v="agents" style="text-align:left"><div class="label">To Collect from Agents</div><div class="big c-owed">' + money(agentSplit.collect) + '</div><div class="sub">To pay agents: ' + money(agentSplit.pay) + '</div></button>' +
-      '<button class="figure" data-act="salesFilterGo" data-v="overdue" style="text-align:left"><div class="label">Overdue Sales</div><div class="big ' + (t.overdue ? 'c-late' : '') + '">' + t.overdue + '</div><div class="sub">Unpaid for over 3 days</div></button>' +
+      '<button class="figure" data-act="custFilterGo" data-v="owing" style="text-align:left"><div class="label">To Collect from Customers</div><div class="big c-owed">' + money(t.owed) + '</div></button>' +
+      '<button class="figure" data-act="custFilterGo" data-v="credit" style="text-align:left"><div class="label">Paid in Advance</div><div class="big c-credit">' + money(t.credit) + '</div></button>' +
+      '<button class="figure" data-act="salesFilterGo" data-v="overdue" style="text-align:left"><div class="label">Overdue Sales</div><div class="big ' + (t.overdue ? 'c-late' : '') + '">' + t.overdue + '</div></button>' +
       '<button class="figure" data-act="go" data-v="rules" style="text-align:left"><div class="label">' + tip(R.tipMode) + '</div><div class="big c-credit">' + money(mNow.tips) + '</div><div class="sub">This month. All time ' + money(t.tips) + '</div></button>' +
       '<button class="figure" data-act="go" data-v="comm" style="text-align:left"><div class="label">Commission This Month</div><div class="big c-credit">' + money(commM) + '</div><div class="sub">All time ' + money(t.commission) + '</div></button>' +
       '<button class="figure" data-act="go" data-v="losses" style="text-align:left"><div class="label">Losses This Month</div><div class="big ' + (lossM ? 'c-late' : '') + '">' + money(lossM) + '</div><div class="sub">All time ' + money(R.losses.total) + '</div></button>' +
-      '<button class="figure" data-act="go" data-v="capital" style="text-align:left"><div class="label">Working Capital</div><div class="big">' + (R.capital.rows[0] ? money(R.capital.rows[0].working) : '—') + '</div><div class="sub">' + (R.capital.rows[0] ? 'From ' + esc(shortDate(R.capital.rows[0].date)) : 'Record your balances') + '</div></button>' +
-      '</div>';
-    h += recordSections();
+      '<button class="figure wide" data-act="go" data-v="capital" style="text-align:left"><div class="label">Working Capital</div><div class="big">' + (R.capital.rows[0] ? money(R.capital.rows[0].working) : '—') + '</div><div class="sub">' + (R.capital.rows[0] ? 'From ' + esc(shortDate(R.capital.rows[0].date)) : 'Record your balances') + '</div></button></div>';
     h += chartMonthly() + chartTopOwing() + chartCustomerMix() + chartCommission();
     return h;
   };
 
+
   function qa(color, act, ic, label, v) {
     return '<button class="qa ' + color + '" data-act="' + act + '"' + (v ? ' data-v="' + v + '"' : '') + '><span class="ic">' + icon(ic) + '</span><span>' + esc(label) + '</span></button>';
+  }
+  function isIOS() { return /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream; }
+  function isInstalled() { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; }
+  function installCard() {
+    if (isInstalled() || S.meta.installHidden) return '';
+    if (deferredInstall) return '<div class="install"><img src="icon-192.png" alt="" width="44" height="44"><div class="tx"><b>Install the app</b><small>Opens like any app on your phone. Free and safe.</small></div>' +
+      '<button class="btn primary" data-act="install">Install</button><button class="x" data-act="hideInstall" aria-label="Close">×</button></div>';
+    if (isIOS()) return '<div class="install"><img src="icon-192.png" alt="" width="44" height="44"><div class="tx"><b>Install the app</b><small>Tap the Share button, then Add to Home Screen.</small></div><button class="x" data-act="hideInstall" aria-label="Close">×</button></div>';
+    return '';
   }
   function backupBanner() {
     if (window.Sync && Sync.status().signedIn) return '';
@@ -469,7 +527,7 @@
         '<div class="bar" style="background:var(--blue);height:' + (num(m.billed) / max * 100).toFixed(1) + '%"></div>' +
         '<div class="bar" style="background:var(--credit);height:' + (num(m.paid) / max * 100).toFixed(1) + '%"></div></div>';
     }).join('');
-    var labels = months.map(function (k) { return '<span>' + MONTHS[Number(k.slice(5)) - 1].slice(0, 3) + '</span>'; }).join('');
+    var labels = months.map(function (k) { return '<span>' + I18N.fmt.monthShort(Number(k.slice(5)) - 1) + '</span>'; }).join('');
     var cur = map[R.today.slice(0, 7)] || {};
     return '<div class="chart"><h3>Billed and Paid, Last 6 Months</h3>' +
       '<div class="legend"><span><i style="background:var(--blue)"></i>Billed</span><span><i style="background:var(--credit)"></i>Paid</span>' + (max > 1 ? '<span>Highest: ' + compact(max) + '</span>' : '') + '</div>' +
@@ -499,8 +557,8 @@
     R.walletComm.forEach(function (r) { if (r.wallet) by[r.wallet] = r2((by[r.wallet] || 0) + r.net); });
     R.evc.forEach(function (r) { if (r.provider) by[r.provider] = r2((by[r.provider] || 0) + r.net); });
     var items = Object.keys(by).filter(function (k) { return by[k]; }).map(function (k) { return { label: k, value: by[k] }; }).sort(function (a, b) { return b.value - a.value; });
-    if (!items.length) return '<div class="chart"><h3>Commission by wallet and EVC</h3><p class="hint" style="margin:0">Nothing yet. Add commission entries under More, then Commissions.</p></div>';
-    return '<div class="chart"><h3>Commission by wallet and EVC</h3><p class="hint" style="margin:0 0 6px">Net, after royalties and agent shares.</p>' + hbars(items, 'var(--credit)') + '</div>';
+    if (!items.length) return '<div class="chart"><h3>Commission by wallet and EVC</h3><p class="hint" style="margin:0">Nothing yet. Add commission entries from the home screen, under Commissions.</p></div>';
+    return '<div class="chart"><h3>Commission by wallet and EVC</h3><p class="hint" style="margin:0 0 6px">Net, after partner and agent shares.</p>' + hbars(items, 'var(--credit)') + '</div>';
   }
 
   /* ----- History: every day, every kind of entry ----- */
@@ -658,7 +716,7 @@
   LISTS.agents = function () {
     var q = UI.agentQuery.trim().toLowerCase(), h = '';
     var bal = R.agents.balances.filter(function (a) { return !q || (a.name + ' ' + a.phone).toLowerCase().indexOf(q) >= 0; });
-    if (!R.agents.rows.length) return empty('No agent entries yet', 'Tap the yellow button to record a float transfer, EVC, bank exchange or other agent entry.');
+    if (!R.agents.rows.length) return empty('No agent entries yet', 'Tap the green button to record a float transfer, EVC, bank exchange or other agent entry.');
     if (bal.length) {
       h += '<div class="section-title">Balances</div>';
       h += bal.map(function (a) {
@@ -712,6 +770,14 @@
   function srow(act, v, ic, title, sub, color) {
     return '<button class="srow" data-act="' + act + '" data-v="' + v + '"><span class="ic ' + (color || 'blue') + '">' + icon(ic) + '</span><span class="tx"><b>' + esc(title) + '</b><small>' + esc(sub) + '</small></span><span class="chev">›</span></button>';
   }
+  VIEWS.language = function () {
+    var cur = S.meta.lang || 'auto', opts = [['auto', 'Phone language', 'Follows the language of this phone, now ' + I18N.names[I18N.detect()] + '. If the app does not have that language, it uses English.']];
+    I18N.supported.forEach(function (k) { opts.push([k, I18N.names[k], '']); });
+    return '<p class="hint">The app can be used in English, French or Portuguese. This choice is only for this phone. Reminder messages have their own language choice when you send them.</p>' +
+      opts.map(function (o) {
+        return '<button class="opt' + (o[0] === cur ? ' on' : '') + '" data-act="setLang" data-v="' + o[0] + '"><span class="radio"></span><span class="tx"' + (o[0] !== 'auto' ? ' data-noi18n' : '') + '><b>' + esc(o[1]) + '</b>' + (o[2] ? '<small>' + esc(o[2]) + '</small>' : '') + '</span></button>';
+      }).join('');
+  };
   VIEWS.settings = function () {
     var ss = window.Sync ? Sync.status() : { configured: false }, p = S.settings.profile, c = COUNTRIES.get(p.country) || {};
     var sec = Security.cfg(), h = '';
@@ -723,6 +789,7 @@
     h += '<div class="section-title">Look and Money</div><div class="slist">' +
       srow('go', 'look', 'look', 'Country, Currency and Theme', (c.name || '') + ' · ' + S.settings.currency.symbol + ' · ' + (THEMES.list[S.settings.theme] || THEMES.list.classic).name, 'green') +
       srow('go', 'rules', 'rules', 'Money Rules', 'Tips and how you record payments', 'green') +
+      srow('go', 'language', 'globe', 'Language', I18N.pref === 'auto' ? 'Phone language (' + I18N.names[I18N.lang] + ')' : I18N.names[I18N.lang], 'green') +
       srow('go', 'choices', 'list', 'Your Choices', 'Payment channels, wallets, EVC operators and other lists', 'green') + '</div>';
     h += '<div class="section-title">Your Data</div><div class="slist">' +
       srow('go', 'backup', 'backup', 'Backup and Restore', S.meta.lastBackup ? 'Last backup ' + shortDate(S.meta.lastBackup) : 'Save a copy of your records', 'blue') +
@@ -781,7 +848,7 @@
       h += '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><b>Fingerprint or Face</b>' + pill(Security.bioEnabled() ? 'On' : 'Off', Security.bioEnabled() ? 'p-overpaid' : 'p-paid') + '</div>' +
         '<p class="hint" style="margin:6px 0 10px">' + (UI.bioOK ? 'Open the app with your fingerprint or face. Your PIN always works as a back-up.' : 'This phone or browser does not offer fingerprint unlock for the app.') + '</p>' +
         (UI.bioOK ? '<button class="btn ' + (Security.bioEnabled() ? 'danger' : 'primary') + '" data-act="' + (Security.bioEnabled() ? 'bioOff' : 'bioOn') + '">' + (Security.bioEnabled() ? 'Turn Off Fingerprint' : 'Turn On Fingerprint') + '</button>' : '') + '</div>';
-      h += '<div class="card"><b>Lock Automatically</b><div class="field" style="margin-top:8px"><select id="sec-lock">' + LOCK_OPTS.map(function (o) { return '<option value="' + o[0] + '"' + ((c.lockAfter || 'now') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
+      h += '<div class="card"><b>Lock Automatically</b><div class="field" style="margin-top:8px"><select id="sec-lock">' + LOCK_OPTS.map(function (o) { return '<option value="' + o[0] + '"' + ((c.lockAfter || '1') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
         '<p class="hint" style="margin:0">How long the app can be out of sight before it asks for your PIN again.</p></div>';
     }
     h += '<div class="card"><b>Hide Amounts</b><p class="hint" style="margin:6px 0 10px">Blur money amounts on screen so people nearby cannot read them. You can also tap the eye at the top of any screen.</p>' +
@@ -818,6 +885,7 @@
     return seg('shareType', UI.shareType, [['Customer', 'Customer'], ['Agent', 'Agent']]) +
       '<div class="field"><label for="share-who">' + (isC ? 'Customer' : 'Agent') + '</label><select id="share-who">' +
       (opts.length ? opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (o[0] === UI.shareKey ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') : '<option>No one yet</option>') + '</select></div>' +
+      '<div class="field"><label for="msg-lang">Message Language</label><select id="msg-lang" data-noi18n>' + langOptions(msgLang(), false) + '</select></div>' +
       '<div class="field"><label for="msg">Message: Change Any Word Before Sending</label><textarea id="msg" class="message">' + esc(UI.shareText) + '</textarea></div>' +
       '<div class="actions">' +
       (phone ? '<button class="btn kiosk" data-act="shareWa">Send on WhatsApp</button>' : '') +
@@ -836,35 +904,60 @@
     if (UI.shareType === 'Customer') { var c = findCustomer(UI.shareKey); return c ? customerMessage(c) : ''; }
     var a = findAgent(UI.shareKey); return a ? agentMessage(a) : '';
   }
+  var MSG = {
+    en: { there: 'there', paidHi: 'Hello {n}, thank you for doing business with us.\n\nAs of {d}, you have nothing to pay', credit: '. You have {a} with us that you paid in advance. It will be used on your next purchase.',
+      thanks: 'Thank you!', oweHi: 'Hello {n}, this is a reminder of your outstanding balance with us as of {d}.', items: 'Unpaid items:', notPaid: '{a} not yet paid', exch: 'Wallet Exchange', buy: 'Purchase',
+      total: 'Total you need to pay: {a}', over: '(Your earlier overpayment of {a} has already been deducted.)', kindly: 'Kindly pay at your earliest convenience. Thank you!',
+      agHi: 'Hello {n}, here is a summary of your agent account as of {d}.', recent: 'Recent entries:', wePaid: 'we paid you {a}', youPaid: 'you paid us {a}', none: 'no amount', entry: 'Entry',
+      showing: '(Showing the 25 most recent of {k} entries.)', balCollect: 'Balance: you need to pay us {a}.', balPay: 'Balance: we will pay you {a}.\n\nWe will pay you soon. Thank you for your patience!', balZero: 'Balance: nothing to pay on either side. Thank you!' },
+    fr: { there: 'cher client', paidHi: 'Bonjour {n}, merci pour votre confiance.\n\nAu {d}, vous n\'avez rien à payer', credit: '. Vous avez {a} chez nous, payé d\'avance. Ce montant sera utilisé pour votre prochain achat.',
+      thanks: 'Merci !', oweHi: 'Bonjour {n}, ceci est un rappel du montant que vous nous devez au {d}.', items: 'Achats non payés :', notPaid: '{a} pas encore payé', exch: 'Échange portefeuille', buy: 'Achat',
+      total: 'Total à payer : {a}', over: '(Votre paiement en trop de {a} a déjà été déduit.)', kindly: 'Merci de régler dès que possible.',
+      agHi: 'Bonjour {n}, voici le résumé de votre compte agent au {d}.', recent: 'Opérations récentes :', wePaid: 'nous vous avons payé {a}', youPaid: 'vous nous avez payé {a}', none: 'aucun montant', entry: 'Opération',
+      showing: '(Les 25 opérations les plus récentes sur {k}.)', balCollect: 'Solde : vous nous devez {a}.', balPay: 'Solde : nous vous devons {a}.\n\nNous vous paierons bientôt. Merci de votre patience !', balZero: 'Solde : rien à payer de part et d\'autre. Merci !' },
+    pt: { there: 'caro cliente', paidHi: 'Olá {n}, obrigado pela sua preferência.\n\nEm {d}, não tem nada a pagar', credit: '. Tem {a} connosco, pago adiantado. Este valor será usado na sua próxima compra.',
+      thanks: 'Obrigado!', oweHi: 'Olá {n}, este é um lembrete do valor que nos deve em {d}.', items: 'Compras por pagar:', notPaid: '{a} ainda por pagar', exch: 'Câmbio de carteira', buy: 'Compra',
+      total: 'Total a pagar: {a}', over: '(O seu pagamento a mais de {a} já foi descontado.)', kindly: 'Por favor, pague assim que possível.',
+      agHi: 'Olá {n}, aqui está o resumo da sua conta de agente em {d}.', recent: 'Operações recentes:', wePaid: 'pagámos-lhe {a}', youPaid: 'pagou-nos {a}', none: 'sem valor', entry: 'Operação',
+      showing: '(As 25 operações mais recentes de {k}.)', balCollect: 'Saldo: tem de nos pagar {a}.', balPay: 'Saldo: vamos pagar-lhe {a}.\n\nVamos pagar-lhe em breve. Obrigado pela sua paciência!', balZero: 'Saldo: nada a pagar de nenhum dos lados. Obrigado!' }
+  };
+  function msgLang() { return UI.msgLang || I18N.lang; }
+  function M(key, v) {
+    var s = (MSG[msgLang()] || MSG.en)[key] || MSG.en[key];
+    return s.replace(/\{(\w)\}/g, function (_, k) { return v && v[k] != null ? v[k] : ''; });
+  }
   function customerMessage(c) {
-    var name = c.name || 'there', date = readable(R.today);
-    if (c.balance <= 0) {
-      return 'Hello ' + name + ', thank you for doing business with us.\n\nAs of ' + date + ', you have nothing to pay' +
-        (c.credit > 0 ? '. You have ' + money(c.credit) + ' with us that you paid in advance. It will be used on your next purchase.' : '.') + '\n\nThank you!' + signOff();
-    }
-    var items = c.rows.filter(function (r) { return r.remaining > 0; }).sort(byNewest);
-    var sum = items.reduce(function (a, r) { return a + r.remaining; }, 0);
-    var lines = items.map(function (r, i) { return (i + 1) + '. ' + shortDate(r.date) + ': ' + (r.details || (r.kind === 'WE' ? 'Wallet Exchange' : 'Purchase')) + ', ' + money(r.remaining) + ' not yet paid'; });
-    return 'Hello ' + name + ', this is a reminder of your outstanding balance with us as of ' + date + '.\n\nUnpaid items:\n' + lines.join('\n') +
-      '\n\nTotal you need to pay: ' + money(c.balance) +
-      (sum - c.balance > 0.005 ? '\n(Your earlier overpayment of ' + money(sum - c.balance) + ' has already been deducted.)' : '') +
-      '\n\nKindly pay at your earliest convenience. Thank you!' + signOff();
+    return I18N.withLang(msgLang(), function () {
+      var name = c.name || M('there'), date = readable(R.today);
+      if (c.balance <= 0) {
+        return M('paidHi', { n: name, d: date }) + (c.credit > 0 ? M('credit', { a: money(c.credit) }) : '.') + '\n\n' + M('thanks') + signOff();
+      }
+      var items = c.rows.filter(function (r) { return r.remaining > 0; }).sort(byNewest);
+      var sum = items.reduce(function (a, r) { return a + r.remaining; }, 0);
+      var lines = items.map(function (r, i) { return (i + 1) + '. ' + shortDate(r.date) + ': ' + (r.details || (r.kind === 'WE' ? M('exch') : M('buy'))) + ', ' + M('notPaid', { a: money(r.remaining) }); });
+      return M('oweHi', { n: name, d: date }) + '\n\n' + M('items') + '\n' + lines.join('\n') +
+        '\n\n' + M('total', { a: money(c.balance) }) +
+        (sum - c.balance > 0.005 ? '\n' + M('over', { a: money(sum - c.balance) }) : '') +
+        '\n\n' + M('kindly') + (msgLang() === 'en' ? '' : ' ' + M('thanks')) + signOff();
+    });
   }
   function agentMessage(a) {
-    var rows = R.agents.rows.filter(function (r) { return C.agentKey(r.name) === a.key && r.hasNet; }).sort(byNewest);
-    var shown = rows.slice(0, 25);
-    var lines = shown.map(function (r, i) {
-      var p = [];
-      if (num(r.toAgent)) p.push('we paid you ' + money(num(r.toAgent)));
-      if (num(r.fromAgent)) p.push('you paid us ' + money(num(r.fromAgent)));
-      return (i + 1) + '. ' + shortDate(r.date) + ': ' + (r.desc || r.txType || 'Entry') + ', ' + (p.join(', ') || 'no amount');
+    return I18N.withLang(msgLang(), function () {
+      var rows = R.agents.rows.filter(function (r) { return C.agentKey(r.name) === a.key && r.hasNet; }).sort(byNewest);
+      var shown = rows.slice(0, 25);
+      var lines = shown.map(function (r, i) {
+        var p = [];
+        if (num(r.toAgent)) p.push(M('wePaid', { a: money(num(r.toAgent)) }));
+        if (num(r.fromAgent)) p.push(M('youPaid', { a: money(num(r.fromAgent)) }));
+        return (i + 1) + '. ' + shortDate(r.date) + ': ' + (r.desc || I18N.t(r.txType || '') || M('entry')) + ', ' + (p.join(', ') || M('none'));
+      });
+      var foot = a.net > 0 ? M('balCollect', { a: money(a.net) }) + '\n\n' + M('kindly') + (msgLang() === 'en' ? '' : ' ' + M('thanks'))
+        : a.net < 0 ? M('balPay', { a: money(-a.net) }) : M('balZero');
+      return M('agHi', { n: a.name, d: readable(R.today) }) + '\n\n' +
+        (lines.length ? M('recent') + '\n' + lines.join('\n') + (rows.length > 25 ? '\n' + M('showing', { k: rows.length }) : '') + '\n\n' : '') + foot + signOff();
     });
-    var foot = a.net > 0 ? 'Balance: you need to pay us ' + money(a.net) + '.\n\nKindly pay at your earliest convenience. Thank you!'
-      : a.net < 0 ? 'Balance: we will pay you ' + money(-a.net) + '.\n\nWe will pay you soon. Thank you for your patience!'
-      : 'Balance: nothing to pay on either side. Thank you!';
-    return 'Hello ' + a.name + ', here is a summary of your agent account as of ' + readable(R.today) + '.\n\n' +
-      (lines.length ? 'Recent entries:\n' + lines.join('\n') + (rows.length > 25 ? '\n(Showing the 25 most recent of ' + rows.length + ' entries.)' : '') + '\n\n' : '') + foot + signOff();
   }
+
 
   /* ----- Daily cash check and monthly balance check ----- */
   function checkBadge(c) {
@@ -960,14 +1053,14 @@
       h += rows.length ? rows.map(function (r) {
         return '<button class="row" data-act="editWallet" data-id="' + esc(r.id) + '"><div class="top"><div><div class="name">' + esc(r.wallet || 'No wallet') + '</div><div class="detail">' + esc(monthName(r.month)) + '</div></div><span class="amount c-credit">' + money(r.net) + '</span></div>' +
           '<div class="bottom"><span class="c-muted num">Statement ' + money(num(r.earned)) + ', received ' + money(num(r.received)) + (num(r.shared) ? ', shared with Agent or Partner ' + money(r.shared) + (r.agentName ? ' (' + esc(r.agentName) + ')' : '') : '') + '</span></div></button>';
-      }).join('') : empty('No wallet commissions yet', 'Tap the yellow button to add one.');
+      }).join('') : empty('No wallet commissions yet', 'Tap the green button to add one.');
     } else if (UI.commTab === 'evc') {
       var ev = R.evc.slice().sort(function (a, b) { return (b.month || '').localeCompare(a.month || '') || (b.seq || 0) - (a.seq || 0); });
       h += '<p class="hint">One row per purchase. You earn commission on the part you sell to customers (Retail). The part you sell on to other dealers (Wholesale) is passed on to them. If you share part of your commission with a partner or line owner, enter it in the form and it is taken off for you.</p>';
       h += ev.length ? ev.map(function (r) {
         return '<button class="row" data-act="editEvc" data-id="' + esc(r.id) + '"><div class="top"><div><div class="name">' + esc(r.provider || 'EVC') + '</div><div class="detail">' + esc(monthName(r.month)) + (r.wholesaler ? ', wholesale to ' + esc(r.wholesaler) : '') + '</div></div><span class="amount c-credit">' + money(r.net) + '</span></div>' +
           '<div class="bottom"><span class="c-muted num">Bought ' + money(num(r.purchase)) + ' (retail ' + money(r.retail) + ', wholesale ' + money(num(r.wholesale)) + '). You keep ' + money(r.net) + ', shared with partner ' + money(r.royalty) + (num(r.wholesale) ? ', passed to dealer ' + money(r.toWholesaler) : '') + '</span></div></button>';
-      }).join('') : empty('No EVC entries yet', 'Tap the yellow button to add one.');
+      }).join('') : empty('No EVC entries yet', 'Tap the green button to add one.');
     } else {
       h += R.commMonths.length ? R.commMonths.map(function (m) {
         return '<div class="card"><b>' + esc(monthName(m.month)) + '</b>' + kv('Mobile Wallets, Net', money(m.wallet)) + kv('EVC, Net', money(m.evc)) + kv('Total You Earned', '<span class="c-credit">' + money(m.total) + '</span>') + '</div>';
@@ -986,7 +1079,7 @@
       h += rows.length ? rows.map(function (r) {
         return '<button class="row" data-act="editRef" data-id="' + esc(r.id) + '"><div class="top"><div><div class="name">' + esc(r.agent || 'No agent') + '</div><div class="detail">' + esc(shortDate(r.date)) + ', ' + esc(r.service || '') + (r.client ? ', ' + esc(r.client) : '') + ', ' + esc(r.refId) + '</div></div><span class="amount">' + money(num(r.amount)) + '</span></div>' +
           '<div class="bottom"><span class="c-muted num">Commission ' + money(r.commission) + ', their cut ' + money(r.agentCut) + '</span><span class="amount c-credit">' + money(r.net) + '</span></div></button>';
-      }).join('') : empty('No referral sales yet', 'Tap the yellow button to add one.');
+      }).join('') : empty('No referral sales yet', 'Tap the green button to add one.');
     } else if (UI.refTab === 'payouts') {
       h += '<p class="hint">Worked out automatically from the sales, per agent per month.</p>';
       h += RF.payouts.length ? RF.payouts.map(function (p) {
@@ -1046,7 +1139,7 @@
   VIEWS.backup = function () {
     var lb = S.meta.lastBackup;
     if (window.Sync && Sync.status().signedIn) return '<div class="card"><b>Online sync is on.</b><p class="hint" style="margin:6px 0 0">Your records are saved to your online account automatically. Backups here are optional extra copies.</p></div>' + backupBody(lb);
-    return '<div class="card"><b>Your records live only on this phone.</b><p class="hint" style="margin:6px 0 0">If the phone is lost, or the app\'s data is cleared, they are gone unless you have a backup. Save one at least once a week and keep a copy off the phone, for example on Google Drive or sent to yourself on WhatsApp. Or switch on Online sync under More.</p></div>' + backupBody(lb);
+    return '<div class="card"><b>Your records live only on this phone.</b><p class="hint" style="margin:6px 0 0">If the phone is lost, or the app\'s data is cleared, they are gone unless you have a backup. Save one at least once a week and keep a copy off the phone, for example on Google Drive or sent to yourself on WhatsApp. Or create an account in Settings, then Your Account.</p></div>' + backupBody(lb);
   };
   function backupBody(lb) {
     return '<div class="card">' + kv('Last backup', lb ? esc(readable(lb)) : 'Never') + kv('Sales', S.sales.length) + kv('Agent entries', S.agents.length) +
@@ -1077,13 +1170,13 @@
       '<h3>Phone numbers</h3><p>Since 4 September 2026, Africell numbers start with 87, QCell with 83 and Comium with 86. Gamcel numbers stay 7 digits. Type the old 7-digit number and the app adds the right start for you when you leave the box. Old and new forms of a number count as the same person.</p>' +
       '<h3>Risk check</h3><p>Each customer gets a risk score from what they owe, how long it has been unpaid, late payments and write-offs. Low risk can get credit up to their limit; High risk should pay on the spot. You can change any customer\'s credit limit.</p>' +
       '<h3>Paying in advance</h3><p>Nothing extra to do. If a customer overpaid before, their next sale is covered automatically, even if they pay nothing that day. If the credit only covers part of it, the account shows just what is left.</p>' +
-      '<h3>Recording quickly</h3><p>New sales start as "Paid in full now". Untick it only when the customer pays part or nothing. "Save, add another" keeps the form open with the same date. Use "Customer paid" when someone pays off what they owe without buying anything.</p>' +
+      '<h3>Recording quickly</h3><p>For every sale you choose Paid in Full, Part Paid or On Credit, so nothing is recorded as paid by mistake. "Save, Add Another" keeps the form open with the same date. Use "Customer Paid" when someone pays off what they owe without buying anything, and "Several Sales at Once" to type many sales together.</p>' +
       '<h3>Paying an old debt late</h3><p>Open the old sale and tap "Record a payment", or put the full amount on the new sale. A payment covers its own sale first, and anything extra pays off the oldest unpaid sales. Either way the old sale turns Paid and the app records how many days late it was paid.</p>' +
       '<h3>Statuses</h3><p>Paid: settled. Overpaid: in credit. Outstanding: unpaid for up to 3 days. Overdue: unpaid for more than 3 days. Bad debt: written off.</p>' +
       '<h3>Customer types</h3><p>Regular: 3 or more sales and at least one a month. Irregular: fewer. Inactive: no sale for 90 days. Bad (high risk): oldest unpaid sale is over 60 days old. Do not give credit: something was written off.</p>' +
       '<h3>Agents</h3><p>"Paid to Agent" is money or float you sent to the agent. "Received from Agent" is what they sent you. If you paid more than you received, it shows as To Collect. If you received more, it shows as To Pay.</p>' +
-      '<h3>EVC</h3><p>Commission = purchase x return rate. Royalty = retail part x retail royalty rate, plus wholesale part x wholesale royalty rate. On the wholesale part, the rest goes to the wholesaler.</p>' +
-      '<h3>Your data</h3><p>Everything stays on this phone and works without internet. Back it up every week from More, then Backup and restore.</p></div>';
+      '<h3>EVC</h3><p>Commission = purchase x operator rate. Shared with Partner = retail part x your partner\'s retail share, plus wholesale part x their wholesale share. On the wholesale part, the rest goes to the dealer.</p>' +
+      '<h3>Your data</h3><p>Everything stays on this phone and works without internet. Back it up every week from Settings, then Backup and Restore.</p></div>';
   };
 
   /* ================= Online sync ================= */
@@ -1106,7 +1199,7 @@
     }
   }
   function syncLive(s) {
-    var when = s.lastSynced ? new Date(s.lastSynced).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    var when = s.lastSynced ? I18N.fmt.stamp(s.lastSynced) : '';
     var cls = s.tone === 'credit' ? 'p-overpaid' : s.tone === 'late' ? 'p-overdue' : s.tone === 'owed' ? 'p-outstanding' : 'p-paid';
     return '<div class="card">' + kv('Status', '<span class="pill ' + cls + '">' + esc(s.label || 'Not set up') + '</span>') +
       (s.email ? kv('Signed in as', esc(s.email)) : '') + kv('Changes waiting to go online', s.pending) +
@@ -1305,7 +1398,7 @@
     sale: { title: ['New Sale', 'Edit Sale'], coll: 'sales', prefix: function (v) { return v.kind === 'WE' ? 'WE' : 'DS'; }, fields: [
       { k: 'kind', t: 'seg', opts: [['DS', 'Data / Deposit'], ['WE', 'Wallet Exchange']] },
       { k: 'date', t: 'pickdate', label: 'Date of This Sale', req: 1 },
-      { k: 'time', t: 'time', label: 'Time the Customer Did It', note: 'Optional. The app also saves the exact moment you recorded the sale.' },
+      { k: 'time', t: 'time', label: 'Time (Optional)' },
       { k: 'phone', t: 'tel', label: 'Customer WhatsApp / Phone', list: 'custPhones' },
       { k: 'name', t: 'text', label: 'Customer Name', req: 1, list: 'custNames' },
       { k: 'exType', t: 'select', label: 'Exchange Type', opts: 'exTypes', show: isWE },
@@ -1327,7 +1420,7 @@
       keep: ['kind', 'date'], info: saleInfo },
     payment: { title: ['Customer Paid', 'Edit Payment'], coll: 'sales', prefix: function () { return 'PY'; }, fields: [
       { k: 'date', t: 'pickdate', label: 'Date They Paid', req: 1 },
-      { k: 'time', t: 'time', label: 'Time They Paid', note: 'Optional. The app also saves the exact moment you recorded it.' },
+      { k: 'time', t: 'time', label: 'Time (Optional)' },
       { k: 'phone', t: 'tel', label: 'Customer WhatsApp / Phone', list: 'custPhones' },
       { k: 'name', t: 'text', label: 'Customer Name', req: 1, list: 'custNames' },
       { k: 'received', t: 'num', label: 'Amount Paid', req: 1 },
@@ -1340,10 +1433,10 @@
       check: function (v, errs) { if (!(num(v.received) > 0)) errs.push('Type the amount they paid.'); } },
     agent: { title: ['New Agent Entry', 'Edit Agent Entry'], coll: 'agents', prefix: function () { return 'AL'; }, fields: [
       { k: 'date', t: 'pickdate', label: 'Date of This Entry', req: 1 },
-      { k: 'time', t: 'time', label: 'Time of the Transaction', note: 'Optional. The app also saves the exact moment you recorded it.' },
-      { k: 'name', t: 'text', label: 'Agent Name', req: 1, list: 'agentNames', note: 'Use the same name every time, even if the agent uses another number.' },
+      { k: 'time', t: 'time', label: 'Time (Optional)' },
+      { k: 'name', t: 'text', label: 'Agent Name', req: 1, list: 'agentNames' },
       { k: 'txType', t: 'select', label: 'Transaction Type', opts: 'agentTxTypes' },
-      { k: 'desc', t: 'text', label: 'Description', note: 'For example: ComCach float, Xpress deposit, GT Bank to Wave.' },
+      { k: 'desc', t: 'text', label: 'Description' },
       { k: 'toAgent', t: 'num', label: 'Paid to Agent', half: 1 },
       { k: 'fromAgent', t: 'num', label: 'Received from Agent', half: 1 },
       { k: 'txNumber', t: 'tel', label: 'Number That Received the Service', note: 'The phone number that received the float, credit or service.', more: 1 },
@@ -1918,10 +2011,12 @@
 
   /* ================= Actions ================= */
   var deferredInstall = null;
-  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); deferredInstall = e; if (cur().v === 'settings') render(); });
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); deferredInstall = e; if (!UI.sheetOpen && ['settings', 'home'].indexOf(cur().v) >= 0 || gateState()) render(); });
+  window.addEventListener('appinstalled', function () { deferredInstall = null; S.meta.installHidden = true; saveLocal(); toast('Installed. Open it from your home screen.'); render(); });
 
   var ACT = {
     tab: function (d) { setTab(d.v); },
+    setLang: function (d) { setLang(d.v); toast('Language saved'); },
     hType: function (d) { UI.hType = d.v; UI.limit = 120; render(); },
     hRange: function (d) { UI.hRange = d.v; UI.limit = 120; render(); },
     newExpense: function () { openForm('expense', null); },
@@ -2016,7 +2111,7 @@
     },
     bioOn: function () { Security.enableBio().then(function () { toast('Fingerprint is on'); render(); }, function () { toast('Could not turn on fingerprint on this phone.'); }); },
     bioOff: function () { Security.disableBio().then(function () { toast('Fingerprint is off'); render(); }); },
-    lockNow: function () { UI.locked = true; UI.pin = ''; UI.pinMsg = ''; UI.bioTried = false; UI.stack = [{ v: 'home' }]; render(); },
+    lockNow: function () { try { sessionStorage.removeItem('act-alive'); } catch (e) {} UI.locked = true; UI.pin = ''; UI.pinMsg = ''; UI.bioTried = false; UI.stack = [{ v: 'home' }]; render(); },
     lockForgot: function () { UI.forgot = true; render(); },
     forgotBack: function () { UI.forgot = false; render(); },
     forgotReset: function () {
@@ -2210,7 +2305,7 @@
     deleteAccount: function () {
       openSheet('Delete account',
         '<div class="form-error">This permanently deletes your account and all your records, online and on this phone. It cannot be undone.</div>' +
-        '<p class="hint">If you want to keep a copy, save a backup first under More, then Backup and restore.</p>' +
+        '<p class="hint">If you want to keep a copy, save a backup first in Settings, then Backup and Restore.</p>' +
         '<div class="field"><label for="del-pass">Type your password to confirm</label><input id="del-pass" type="password" autocomplete="current-password"></div><div id="del-msg"></div>',
         '<button class="btn" data-act="closeSheet">Cancel</button><button class="btn danger" data-act="confirmDeleteAccount">Delete everything</button>');
     },
@@ -2228,7 +2323,13 @@
       Sync.removeConfig();
     },
     syncNow: function () { Sync.syncNow(); toast('Syncing'); },
-    install: function () { if (deferredInstall) { deferredInstall.prompt(); deferredInstall = null; render(); } }
+    install: function () {
+      if (!deferredInstall) return;
+      deferredInstall.prompt();
+      deferredInstall.userChoice.then(function (c) { if (c && c.outcome === 'accepted') toast('Installing. The app will appear on your home screen.'); })['catch'](function () {});
+      deferredInstall = null; render();
+    },
+    hideInstall: function () { S.meta.installHidden = true; saveLocal(); render(); }
   };
   function fallbackCopy() {
     var ta = document.getElementById('msg'); ta.focus(); ta.select();
@@ -2282,6 +2383,8 @@
     var t = e.target;
     if (t.id === 'share-who') { UI.shareKey = t.value; UI.shareText = ''; render(); return; }
     if (t.id === 'importFile') { importFile(t.files && t.files[0]); t.value = ''; return; }
+    if (t.id === 'lang-pick') { setLang(t.value); return; }
+    if (t.id === 'msg-lang') { UI.msgLang = t.value; UI.shareText = ''; render(); return; }
     if (t.id === 'h-status') { UI.hStatus = t.value; UI.limit = 120; render(); return; }
     if (t.id === 'h-chan') { UI.hChannel = t.value; UI.limit = 120; render(); return; }
     if (t.id === 'h-from') { UI.hFrom = t.value; UI.limit = 120; render(); return; }
@@ -2342,7 +2445,7 @@
       if (!confirm(msg)) return;
       var keep = { lastBackup: S.meta.lastBackup, firebase: S.meta.firebase, pending: S.meta.pending, security: S.meta.security, ownerUid: S.meta.ownerUid,
         sync: S.meta.sync, hideAmounts: S.meta.hideAmounts, pinSkipped: S.meta.pinSkipped, knownDevices: S.meta.knownDevices, devSince: S.meta.devSince,
-        skipAccount: S.meta.skipAccount, profileSkipped: S.meta.profileSkipped, lastChannel: S.meta.lastChannel, deviceAlerts: S.meta.deviceAlerts };
+        lang: S.meta.lang, skipAccount: S.meta.skipAccount, profileSkipped: S.meta.profileSkipped, lastChannel: S.meta.lastChannel, deviceAlerts: S.meta.deviceAlerts };
       var mine = S.settings.profile;
       S = normalize(obj); S.meta = Object.assign({ lastBackup: null }, S.meta);
       Object.keys(keep).forEach(function (k) { if (keep[k] !== undefined) S.meta[k] = keep[k]; else delete S.meta[k]; });
@@ -2355,6 +2458,18 @@
     reader.readAsText(file);
   }
   /* The app hides itself when you switch away, and locks again after the time you chose. */
+  /* A refresh or an app update reloads the page. That is not leaving the app, so it does not ask for the PIN again.
+     Closing the app clears this note, so opening it fresh still asks. */
+  function markAlive() { try { if (Security.enabled() && !UI.locked) sessionStorage.setItem('act-alive', String(Date.now())); else sessionStorage.removeItem('act-alive'); } catch (e) {} }
+  function resumeGrace() {
+    try {
+      var nav = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0]) || {};
+      if (nav.type !== 'reload') return false;   // opening the app fresh always asks
+      var at = Number(sessionStorage.getItem('act-alive') || 0); if (!at) return false;
+      var d = Security.lockDelayMs(), allow = Math.max(d === Infinity ? 12 * 3600e3 : d, 60e3);
+      return Date.now() - at < allow;
+    } catch (e) { return false; }
+  }
   var cover = null;
   function showCover() {
     if (cover || !(window.Security && Security.enabled())) return;
@@ -2364,15 +2479,15 @@
   }
   function hideCover() { if (cover) { cover.remove(); cover = null; } }
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden) { UI.hiddenAt = Date.now(); showCover(); return; }
+    if (document.hidden) { UI.hiddenAt = Date.now(); markAlive(); showCover(); return; }
     hideCover();
     if (Security.enabled() && !UI.locked && UI.hiddenAt) {
       var delay = Security.lockDelayMs();
-      if (delay !== Infinity && Date.now() - UI.hiddenAt >= delay) { UI.locked = true; UI.pin = ''; UI.pinMsg = ''; UI.bioTried = false; render(); return; }
+      if (delay !== Infinity && Date.now() - UI.hiddenAt >= delay) { try { sessionStorage.removeItem('act-alive'); } catch (e) {} UI.locked = true; UI.pin = ''; UI.pinMsg = ''; UI.bioTried = false; render(); return; }
     }
     if (!UI.sheetOpen) { recompute(); render(); }
   });
-  window.addEventListener('pagehide', showCover);
+  window.addEventListener('pagehide', function () { markAlive(); showCover(); });
   window.addEventListener('pageshow', function () { if (!document.hidden) hideCover(); });
 
   /* ================= Start ================= */
@@ -2383,9 +2498,9 @@
   }
   history.replaceState({ n: 1 }, '');
   Store.get().then(function (saved) {
-    S = normalize(saved); applyLocale();
+    S = normalize(saved); I18N.setPref(S.meta.lang || 'auto'); I18N.watch(); applyLocale();
     Security.init({ getS: function () { return S; }, saveLocal: function () { return Store.set(S); } });
-    UI.locked = Security.enabled();
+    UI.locked = Security.enabled() && !resumeGrace();
     Security.bioSupported().then(function (ok) { UI.bioOK = ok; });
     recompute(); render();
     if (window.Sync) Sync.init({

@@ -368,3 +368,86 @@ main { max-width: 680px; margin: 0 auto; padding: 14px 14px 0; }
 .batch-row .field input, .batch-row .field select { width: 100%; min-height: 50px; padding: 12px 13px; border: 1px solid #C9D2E2; border-radius: 12px; background: var(--card); font-size: 1.05rem; }
 .batch-row .telrow select { font-size: 0.95rem; padding: 12px 8px; }
 .alert-new { border-left: 5px solid var(--red); }
+
+/* Language picker on the welcome screens */
+.langpick { display: flex; justify-content: flex-end; align-items: center; gap: 6px; margin-bottom: 4px; }
+.langpick select { border: 1px solid var(--line); background: var(--card); border-radius: 18px; padding: 7px 12px; font-size: 0.9rem; min-height: 38px; }
+
+/* Long words in any language: columns may shrink, words may wrap, nothing spills off the screen */
+.quick, .figures, .tiles, .two, .themes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.paychips, .datechips { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.qa span, .tile b, .tile small, .figure .label, .figure .big, .figure .sub, .pchip b, .pchip small, .dchip b, .dchip small, .srow .tx b, .srow .tx small, .row .name, .row .detail { overflow-wrap: anywhere; hyphens: auto; }
+.qa { min-width: 0; }
+.qa span, .tile b, .pchip b, .dchip b, .srow .tx b, .figure .label { overflow-wrap: break-word; hyphens: manual; }
+@media (max-width: 420px) {
+  .qa { flex-direction: column; align-items: flex-start; gap: 8px; min-height: 96px; padding: 12px; }
+  .qa .ic { flex: 0 0 auto; width: 40px; height: 40px; }
+}
+
+/* ===== Version 11: calm design. White surfaces, one accent colour, red and green only for money. ===== */
+:root { --paper: #F5F6F8; --card: #FFFFFF; --ink: #101828; --ink-soft: #344054; --muted: #667085; --line: #EAECF0;
+  --red: #D92D20; --red-soft: #FEF3F2; --green: #067647; --green-soft: #ECFDF3; --late: #B42318; --neutral-bg: #F2F4F7; --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.04); }
+body { background: var(--paper); }
+.topbar { background: #FFFFFF !important; color: var(--ink); box-shadow: 0 1px 0 var(--line); padding-top: calc(env(safe-area-inset-top, 0px) + 12px); }
+.topbar::after { display: none; }
+.topbar::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, var(--s1) 0 33.3%, var(--blue) 33.3% 66.6%, var(--s3) 66.6%); }
+[data-theme=classic] .topbar::before { display: none; }
+.topbar h1 { color: var(--ink); font-size: 1.12rem; font-weight: 800; }
+.topbar .back { color: var(--ink); }
+.topbar .eye { background: var(--paper); color: var(--ink-soft); }
+.sync-badge { background: var(--neutral-bg); color: var(--ink-soft); }
+.sync-badge.t-credit { background: var(--green-soft); color: var(--green); }
+.sync-badge.t-owed { background: var(--red-soft); color: var(--red); }
+.sync-badge.t-late { background: var(--red); color: #fff; }
+.card, .figure, .row, .tile, .detail-hero, .chart, .menu, .slist, .profile-card, .opt, .theme, .batch-row, .more-fields { border: 1px solid var(--line); box-shadow: var(--shadow); }
+.btn.kiosk, .fab { background: var(--blue); border-color: var(--blue); }
+.tile .ic, .tile.green .ic, .tile.red .ic, .tile.blue .ic, .srow .ic.blue, .srow .ic.green, .srow .ic.red { background: var(--blue-soft); color: var(--blue); }
+.nav { box-shadow: 0 -1px 0 var(--line); border-top: 0; }
+.banner { background: #FFFAEB; border: 1px solid #FEDF89; }
+.section-title { color: var(--ink); }
+.hint { color: var(--muted); }
+.month-head { border-bottom-color: var(--line); }
+
+/* Home */
+.hero { background: var(--card); color: var(--ink); border: 1px solid var(--line); box-shadow: var(--shadow); padding: 16px 18px; }
+.hero .hello { font-size: 1rem; color: var(--ink-soft); }
+.hero .hello b { color: var(--ink); font-size: 1.2rem; }
+.hero .hdate { color: var(--muted); opacity: 1; margin-bottom: 12px; }
+.hero-nums .label { color: var(--muted); opacity: 1; }
+.hero-nums .big { color: var(--ink); }
+.btn-new { width: 100%; min-height: 58px; border: 0; border-radius: 16px; background: var(--blue); color: #fff; font-size: 1.12rem; font-weight: 800;
+  display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 0 14px; box-shadow: 0 4px 12px rgba(16, 24, 40, 0.14); }
+.btn-new .plus { font-size: 1.7rem; line-height: 1; margin-top: -3px; }
+.shortcuts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-bottom: 16px; }
+.sc { background: none; border: 0; padding: 2px 0; display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--ink-soft); font-size: 0.78rem; font-weight: 600; text-align: center; line-height: 1.2; }
+.sc .ic { width: 52px; height: 52px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow); color: var(--blue); display: flex; align-items: center; justify-content: center; }
+.sc .ic svg { width: 24px; height: 24px; }
+.owed { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: 16px; overflow: hidden; margin-bottom: 12px; }
+.owed button { background: none; border: 0; text-align: left; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.owed button + button { border-left: 1px solid var(--line); }
+.owed .lab { color: var(--muted); font-size: 0.85rem; }
+.owed b { font-size: 1.35rem; font-weight: 800; color: var(--ink); overflow-wrap: anywhere; }
+.owed b.c-owed { color: var(--red); }
+.owed small { color: var(--muted); font-size: 0.78rem; }
+.chipline { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.chipa { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--card); color: var(--ink-soft); border-radius: 20px; padding: 7px 12px; font-size: 0.86rem; font-weight: 700; }
+.chipa svg { width: 16px; height: 16px; }
+.chipa.warn { border-color: #FECDCA; background: var(--red-soft); color: var(--late); }
+.sec-head { display: flex; justify-content: space-between; align-items: baseline; margin: 16px 2px 8px; }
+.sec-head b { font-size: 1.02rem; }
+.sec-head button { background: none; border: 0; color: var(--blue); font-weight: 700; font-size: 0.92rem; padding: 4px; }
+.toolgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px 4px; background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: 16px; padding: 16px 6px; margin-bottom: 8px; }
+.tool { background: none; border: 0; padding: 0 2px; display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--ink-soft); font-size: 0.76rem; font-weight: 600; text-align: center; line-height: 1.2; min-width: 0; overflow-wrap: break-word; }
+.tool .ic { position: relative; width: 46px; height: 46px; border-radius: 14px; background: var(--blue-soft); color: var(--blue); display: flex; align-items: center; justify-content: center; }
+.tool .ic svg { width: 23px; height: 23px; }
+.tool .dot { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--red); color: #fff; font-size: 0.7rem; font-style: normal; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.install { display: flex; align-items: center; gap: 12px; background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: 16px; padding: 12px; margin-bottom: 12px; }
+.install img { border-radius: 12px; flex: 0 0 44px; }
+.install .tx { flex: 1; min-width: 0; }
+.install .tx b { display: block; }
+.install .tx small { color: var(--muted); font-size: 0.82rem; }
+.install .btn { min-height: 40px; padding: 8px 14px; }
+.install .x { background: none; border: 0; color: var(--muted); font-size: 1.4rem; padding: 4px 6px; }
+.install-btn { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 12px auto 4px; max-width: 320px; background: var(--card); color: var(--blue); border-color: var(--blue); }
+.install-btn svg { width: 20px; height: 20px; }
+@media (max-width: 360px) { .shortcuts { gap: 2px; } .sc .ic { width: 46px; height: 46px; } .sc { font-size: 0.72rem; } }

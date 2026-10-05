@@ -37,7 +37,7 @@
     },
     resetFails: function () { var c = sec(); c.fails = 0; c.lockUntil = 0; host.saveLocal(); },
     disable: function () { var c = sec(); delete c.pinHash; delete c.salt; delete c.bioId; c.fails = 0; c.lockUntil = 0; return host.saveLocal(); },
-    lockDelayMs: function () { var v = sec().lockAfter || 'now'; return v === 'never' ? Infinity : (LOCK_AFTER[v] != null ? LOCK_AFTER[v] : 0); },
+    lockDelayMs: function () { var v = sec().lockAfter || '1'; return v === 'never' ? Infinity : (LOCK_AFTER[v] != null ? LOCK_AFTER[v] : 0); },
     bioSupported: function () {
       if (!g.PublicKeyCredential || !PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) return Promise.resolve(false);
       return PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(function () { return false; });

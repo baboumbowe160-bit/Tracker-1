@@ -29,8 +29,10 @@
   }
   function fm(x) {
     var n = r2(num(x)), a = Math.abs(n);
+    if (g.I18N) return g.I18N.money(n, OPT.cur);
     return (n < 0 ? '-' : '') + OPT.cur + a.toLocaleString('en-GB', { minimumFractionDigits: a % 1 ? 2 : 0, maximumFractionDigits: 2 });
   }
+  function cur() { return OPT.cur; }
 
   /* ---------- Phone numbers ----------
      Gambia moved to 9-digit numbers on 4 Sep 2026. Strict rules:
@@ -540,7 +542,7 @@
 
   g.Calc = { computeAll: computeAll, computeSales: computeSales, computeCustomers: computeCustomers,
     computeAgents: computeAgents, bracketCommission: bracketCommission, computeEvc: computeEvc, computeRisk: computeRisk,
-    setOptions: setOptions, fm: fm, parsePhone: parsePhone, normStored: normStored, phoneKey: phoneKey, phoneInfo: phoneInfo,
+    setOptions: setOptions, fm: fm, cur: cur, parsePhone: parsePhone, normStored: normStored, phoneKey: phoneKey, phoneInfo: phoneInfo,
     assignRefIds: assignRefIds, newRefId: newRefId, snapEmpty: snapEmpty, isPay: isPay, paidOf: paidOf, moneyInOf: moneyInOf, snapTotal: snapTotal,
     gmNormalize: normStored, GM_RULES: GM_RULES, lastDay: lastDay,
     todayStr: todayStr, toDays: toDays, num: num, has: has, r2: r2, monthOf: monthOf, custKey: custKey, agentKey: agentKey };
