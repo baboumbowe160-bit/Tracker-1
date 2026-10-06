@@ -173,41 +173,43 @@
 
   /* ================= Small UI helpers ================= */
   var ICONS = {
-    home: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>',
-    sales: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
-    agents: '<path d="M4 8h14l-3-3"/><path d="M20 16H6l3 3"/>',
-    customers: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c.8-3.5 3.2-5 6-5s5.2 1.5 6 5"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.6c2.6.1 4.3 1.6 5 4.4"/>',
-    more: '<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>',
+    home: '<path class="f" d="M5 10.2L12 4.5l7 5.7V20H5z"/><path d="M3 11l9-7.2L21 11"/><path d="M5 9.6V20h14V9.6"/><path d="M10 20v-5.2h4V20"/>',
+    sales: '<path class="f" d="M6 3.5h12v17l-3-1.8-3 1.8-3-1.8-3 1.8z"/><path d="M6 3.5h12v17l-3-1.8-3 1.8-3-1.8-3 1.8z"/><path d="M9 8.5h6M9 12h6"/>',
+    agents: '<circle class="f" cx="12" cy="12" r="9"/><path d="M6.5 9.5h10.5l-2.6-2.6"/><path d="M17.5 14.5H7l2.6 2.6"/>',
+    customers: '<circle class="f" cx="9" cy="8.2" r="3.4"/><circle cx="9" cy="8.2" r="3.4"/><path class="f" d="M3 20c.7-3.6 3.1-5.3 6-5.3s5.3 1.7 6 5.3z"/><path d="M3 20c.7-3.6 3.1-5.3 6-5.3s5.3 1.7 6 5.3"/><path d="M16.2 5.3a3 3 0 010 5.8M18.2 15c1.8.6 2.8 2.2 3.3 4.5"/>',
+    more: '<circle cx="5.5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18.5" cy="12" r="1.5"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
-    pay: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.6 2.6L16 9.6"/>',
-    chat: '<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/>',
-    cash: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6.5 9.5h.01M17.5 14.5h.01"/>',
-    recon: '<path d="M12 4v16M6 20h12M5 8h14"/><path d="M5 8l-2.5 6a3 3 0 005 0zM19 8l-2.5 6a3 3 0 005 0z"/>',
-    loss: '<path d="M12 3.5l9 16.5H3z"/><path d="M12 10v4.5M12 17.2v.01"/>',
-    comm: '<circle cx="7" cy="7" r="2.5"/><circle cx="17" cy="17" r="2.5"/><path d="M19 5L5 19"/>',
-    capital: '<circle cx="12" cy="12" r="9"/><path d="M12 3v9h9"/>',
-    backup: '<path d="M7 18a4.5 4.5 0 01-.6-8.96A6 6 0 0118 9.5a4 4 0 01-1 7.9"/><path d="M12 12v8M9 15l3-3 3 3"/>',
-    settings: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
-    help: '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 114 2.1c-1 .6-1.6 1.2-1.6 2.5M12 17v.01"/>',
-    account: '<circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c1-3.6 3.8-5.5 7-5.5s6 1.9 7 5.5"/>',
-    privacy: '<path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
-    install: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
-    chart: '<path d="M4 20h16"/><path d="M7 16v-5M12 16V7M17 16v-8"/>',
-    globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/>',
-    history: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
-    eye: '<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.8"/>',
-    eyeoff: '<path d="M3 3l18 18M10.6 6a9.5 9.5 0 011.4-.1c6.4 0 10 6.1 10 6.1a17 17 0 01-3.2 3.9M6.6 7.4A16.7 16.7 0 002 12s3.6 6.5 10 6.5c1.5 0 2.9-.3 4.1-.9"/><path d="M9.9 9.9a3 3 0 004.2 4.2"/>',
-    lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>',
-    shield: '<path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/>',
-    finger: '<path d="M7 11a5 5 0 0110 0v2"/><path d="M5 14c0-1 .2-2 .5-3M9 21c-.5-1.5-.7-3-.7-4.7V11a3.7 3.7 0 017.4 0v3.5c0 2 .3 3.5 1 5M12 11v5c0 1.8.3 3.2.8 4.5"/>',
-    expense: '<path d="M12 3v12M8 11l4 4 4-4"/><path d="M4 18h16v3H4z"/>',
-    look: '<circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r="1.2"/><circle cx="12" cy="7.5" r="1.2"/><circle cx="16" cy="10" r="1.2"/><path d="M12 21c-1.5 0-2-1.4-1.3-2.4.7-1 2.3-.8 2.8-1.9.6-1.4-.6-2.7-2.2-2.7"/>',
-    rules: '<path d="M5 4h14v16H5z"/><path d="M9 9h6M9 13h6M9 17h3"/>',
-    device: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>',
-    list: '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
-    risk: '<path d="M4 16a8 8 0 1116 0"/><path d="M12 16l4-5"/><circle cx="12" cy="16" r="1.4"/>'
+    pay: '<circle class="f" cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="9"/><path d="M8 12.4l2.7 2.7L16.2 9.5"/>',
+    chat: '<path class="f" d="M4 5.5h16v11H9.5L5 20.5v-4H4z"/><path d="M4 5.5h16v11H9.5L5.5 20v-3.5H4z"/><path d="M8 9.5h8M8 12.8h5"/>',
+    cash: '<rect class="f" x="3" y="6" width="18" height="12" rx="2.5"/><rect x="3" y="6" width="18" height="12" rx="2.5"/><circle cx="12" cy="12" r="2.7"/><path d="M6.5 12h.01M17.5 12h.01"/>',
+    recon: '<path class="f" d="M5 8l-2.6 6.2a3.1 3.1 0 005.2 0zM19 8l-2.6 6.2a3.1 3.1 0 005.2 0z"/><path d="M12 4v16M7 20h10M5 8h14"/><path d="M5 8l-2.6 6.2a3.1 3.1 0 005.2 0zM19 8l-2.6 6.2a3.1 3.1 0 005.2 0z"/>',
+    loss: '<path class="f" d="M12 3.6l9 16H3z"/><path d="M12 3.6l9 16H3z"/><path d="M12 10v4.4M12 17.1v.01"/>',
+    comm: '<circle class="f" cx="7" cy="7" r="2.8"/><circle class="f" cx="17" cy="17" r="2.8"/><circle cx="7" cy="7" r="2.8"/><circle cx="17" cy="17" r="2.8"/><path d="M19 5L5 19"/>',
+    capital: '<circle class="f" cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="9"/><path d="M12 3v9l6.4 6.4"/>',
+    backup: '<path class="f" d="M7 18.5a4.5 4.5 0 01-.7-8.9A6 6 0 0118 9.6a4.5 4.5 0 01-1 8.9z"/><path d="M7 18.5a4.5 4.5 0 01-.7-8.9A6 6 0 0118 9.6a4.5 4.5 0 01-1 8.9"/><path d="M12 12.5v6M9.4 15l2.6-2.6 2.6 2.6"/>',
+    settings: '<path d="M4 7h9M19 7h1M4 17h3M13 17h7"/><circle class="f" cx="16" cy="7" r="2.6"/><circle cx="16" cy="7" r="2.6"/><circle class="f" cx="10" cy="17" r="2.6"/><circle cx="10" cy="17" r="2.6"/>',
+    help: '<circle class="f" cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="9"/><path d="M9.7 9.4a2.4 2.4 0 114 1.9c-.9.6-1.7 1.1-1.7 2.3M12 16.8v.01"/>',
+    account: '<circle class="f" cx="12" cy="8.5" r="3.6"/><circle cx="12" cy="8.5" r="3.6"/><path class="f" d="M5 20c.9-3.7 3.8-5.5 7-5.5s6.1 1.8 7 5.5z"/><path d="M5 20c.9-3.7 3.8-5.5 7-5.5s6.1 1.8 7 5.5"/>',
+    privacy: '<path class="f" d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M8.8 12l2.2 2.2 4.2-4.2"/>',
+    install: '<rect class="f" x="4" y="17" width="16" height="3.5" rx="1.2"/><path d="M12 3.5v11M7.5 10.2l4.5 4.5 4.5-4.5"/><path d="M4 17.5v1.8c0 .7.5 1.2 1.2 1.2h13.6c.7 0 1.2-.5 1.2-1.2v-1.8"/>',
+    chart: '<rect class="f" x="4.5" y="12" width="3.4" height="7.5" rx="1"/><rect class="f" x="10.3" y="6" width="3.4" height="13.5" rx="1"/><rect class="f" x="16.1" y="9.5" width="3.4" height="10" rx="1"/><rect x="4.5" y="12" width="3.4" height="7.5" rx="1"/><rect x="10.3" y="6" width="3.4" height="13.5" rx="1"/><rect x="16.1" y="9.5" width="3.4" height="10" rx="1"/>',
+    globe: '<circle class="f" cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/>',
+    history: '<circle class="f" cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="9"/><path d="M12 7v5.2l3.4 2"/>',
+    eye: '<path class="f" d="M2.5 12S6 6 12 6s9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><path d="M2.5 12S6 6 12 6s9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><circle cx="12" cy="12" r="2.6"/>',
+    eyeoff: '<path d="M3 3l18 18M10.6 6.1c.5-.1 1-.1 1.4-.1 6 0 9.5 6 9.5 6a16 16 0 01-3.1 3.8M6.6 7.5A16 16 0 002.5 12S6 18 12 18c1.5 0 2.8-.3 4-.9"/><path d="M9.9 9.9a3 3 0 004.2 4.2"/>',
+    lock: '<rect class="f" x="5" y="11" width="14" height="9.5" rx="2.4"/><rect x="5" y="11" width="14" height="9.5" rx="2.4"/><path d="M8 11V8a4 4 0 018 0v3"/><path d="M12 15v2"/>',
+    shield: '<path class="f" d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/>',
+    finger: '<path d="M7 11a5 5 0 0110 0v2.2"/><path d="M5 14c0-1 .2-2 .5-3M9 21c-.5-1.5-.7-3-.7-4.7V11a3.7 3.7 0 017.4 0v3.5c0 2 .3 3.5 1 5M12 11v5c0 1.8.3 3.2.8 4.5"/>',
+    expense: '<rect class="f" x="3" y="6" width="18" height="12" rx="2.5"/><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M12 9v5M9.6 12l2.4 2.4 2.4-2.4"/>',
+    look: '<path class="f" d="M12 3a9 9 0 100 18c1.6 0 2.2-1.3 1.5-2.4-.7-1.1-.2-2.5 1.3-2.5H17a4 4 0 004-4c0-5-4-9.1-9-9.1z"/><path d="M12 3a9 9 0 100 18c1.6 0 2.2-1.3 1.5-2.4-.7-1.1-.2-2.5 1.3-2.5H17a4 4 0 004-4c0-5-4-9.1-9-9.1z"/><path d="M7.6 11h.01M10.6 7.6h.01M15 8h.01"/>',
+    rules: '<rect class="f" x="5" y="3.5" width="14" height="17" rx="2.4"/><rect x="5" y="3.5" width="14" height="17" rx="2.4"/><path d="M9 9h6M9 13h6M9 17h3"/>',
+    device: '<rect class="f" x="7" y="3" width="10" height="18" rx="2.4"/><rect x="7" y="3" width="10" height="18" rx="2.4"/><path d="M11 17.7h2"/>',
+    list: '<path d="M8.5 6.5H20M8.5 12H20M8.5 17.5H20"/><path d="M4.2 6.5h.01M4.2 12h.01M4.2 17.5h.01"/>',
+    risk: '<path class="f" d="M3.5 17a8.5 8.5 0 0117 0z"/><path d="M3.5 17a8.5 8.5 0 0117 0"/><path d="M12 17l3.8-5"/><circle cx="12" cy="17" r="1.3"/>',
+    bell: '<path class="f" d="M6 17V11a6 6 0 0112 0v6z"/><path d="M6 17V11a6 6 0 0112 0v6l1.5 1.5h-15z"/><path d="M10 21h4"/>',
+    check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>'
   };
-  function icon(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICONS[n] + '</svg>'; }
+  function icon(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[n] || '') + '</svg>'; }
   var toastTimer = null;
   function toast(msg) {
     var t = document.getElementById('toast');
@@ -396,6 +398,7 @@
     var body = (VIEWS[v.v] || VIEWS.home)(v);
     root.innerHTML = top + '<main>' + body + '</main>' + navBar() + fab(v);
     if (LISTS[v.v]) renderList();
+    decorateRows();
   }
   function navBar() {
     var t = UI.stack[0].v;
@@ -438,11 +441,11 @@
       tile('blue', 'go', 'capital', 'capital', 'Capital Portfolio', 'Available and working capital') + tile('red', 'go', 'expenses', 'expense', 'Expenses and Money Out', money(R.expenses.total) + ' recorded') +
       tile('red', 'go', 'losses', 'loss', 'Losses and Errors', 'Write-offs and mistakes') + '</div>';
   }
-  function sc(act, ic, label, v) {
-    return '<button class="sc" data-act="' + act + '"' + (v ? ' data-v="' + v + '"' : '') + '><span class="ic">' + icon(ic) + '</span><span>' + esc(label) + '</span></button>';
+  function sc(act, ic, label, v, col) {
+    return '<button class="sc" data-act="' + act + '"' + (v ? ' data-v="' + v + '"' : '') + '><span class="ic ' + (col || 'c-blue') + '">' + icon(ic) + '</span><span>' + esc(label) + '</span></button>';
   }
-  function tool(act, v, ic, label, badge) {
-    return '<button class="tool" data-act="' + act + '" data-v="' + v + '"><span class="ic">' + icon(ic) + (badge ? '<i class="dot">' + badge + '</i>' : '') + '</span><span>' + esc(label) + '</span></button>';
+  function tool(act, v, ic, label, badge, col) {
+    return '<button class="tool" data-act="' + act + '" data-v="' + v + '"><span class="ic ' + (col || 'c-blue') + '">' + icon(ic) + (badge ? '<i class="dot">' + badge + '</i>' : '') + '</span><span>' + esc(label) + '</span></button>';
   }
   VIEWS.home = function () {
     var t = R.totals, today = R.today, h = '', name = S.settings.profile.name;
@@ -452,12 +455,12 @@
     R.agents.balances.forEach(function (x) { if (x.net > 0) { ag.collect += x.net; ag.n++; } else ag.pay -= x.net; });
     var owing = R.customers.filter(function (c) { return c.owed > 0; }).length;
     h += installCard() + backupBanner() + deviceBanner();
-    h += '<div class="hero"><div class="hello">' + (name ? 'Welcome, <b>' + esc(name) + '</b>' : 'Welcome') + '</div><div class="hdate">' + esc(readable(today)) + '</div>' +
-      '<div class="hero-nums"><div><div class="label">Money received today</div><div class="big">' + money(dayNow.received) + '</div></div>' +
-      '<div style="text-align:right"><div class="label">Entries today</div><div class="big">' + dayNow.count + '</div></div></div></div>';
-    h += '<button class="btn-new" data-act="newSale"><span class="plus">+</span><span>New Sale</span></button>';
-    h += '<div class="shortcuts">' + sc('newPayment', 'pay', 'Payment') + sc('newAgent', 'agents', 'Agent') + sc('newExpense', 'expense', 'Money Out') +
-      sc('newCapital', 'cash', 'Balances') + sc('go', 'chat', 'Reminder', 'share') + '</div>';
+    h += '<div class="hero"><div class="hero-top"><div><div class="hello">' + (name ? 'Welcome, <b>' + esc(name) + '</b>' : 'Welcome') + '</div><div class="hdate">' + esc(readable(today)) + '</div></div>' +
+      '<span class="hero-count"><b>' + dayNow.count + '</b> ' + (dayNow.count === 1 ? 'entry today' : 'entries today') + '</span></div>' +
+      '<div class="label">Money received today</div><div class="big">' + money(dayNow.received) + '</div>' +
+      '<button class="btn-new" data-act="newSale"><span class="plus">+</span><span>New Sale</span></button></div>';
+    h += '<div class="shortcuts">' + sc('newPayment', 'pay', 'Payment', '', 'c-green') + sc('newAgent', 'agents', 'Agent', '', 'c-purple') + sc('newExpense', 'expense', 'Money Out', '', 'c-orange') +
+      sc('newCapital', 'cash', 'Balances', '', 'c-teal') + sc('go', 'chat', 'Reminder', 'share', 'c-blue') + '</div>';
     h += '<div class="owed"><button data-act="custFilterGo" data-v="owing"><span class="lab">To Collect</span><b class="c-owed">' + money(r2(t.owed + ag.collect)) + '</b>' +
       '<small>' + owing + ' ' + (owing === 1 ? 'customer' : 'customers') + ' · ' + ag.n + ' ' + (ag.n === 1 ? 'agent' : 'agents') + '</small></button>' +
       '<button data-act="tab" data-v="agents"><span class="lab">To Pay</span><b>' + money(r2(t.credit + ag.pay)) + '</b><small>Agents and advance payments</small></button></div>';
@@ -470,11 +473,11 @@
     if (recent.length) h += '<div class="sec-head"><b>Recent</b><button data-act="tab" data-v="history">See all</button></div><div class="recent">' + recent.map(entryRow).join('') + '</div>';
     var rk = R.risk.summary;
     h += '<div class="sec-head"><b>Tools</b></div><div class="toolgrid">' +
-      tool('tab', 'history', 'history', 'History') + tool('tab', 'customers', 'customers', 'Customers') + tool('tab', 'agents', 'agents', 'Agents') +
-      tool('go', 'risk', 'risk', 'Risk', rk.high || '') + tool('go', 'share', 'chat', 'Reminders') + tool('go', 'daily', 'cash', 'Cash Check') +
-      tool('go', 'recon', 'recon', 'Monthly Check') + tool('go', 'capital', 'capital', 'Capital') + tool('go', 'comm', 'comm', 'Commissions') +
-      tool('go', 'ref', 'customers', 'Referrals') + tool('go', 'expenses', 'expense', 'Money Out') + tool('go', 'losses', 'loss', 'Losses') +
-      tool('go', 'reports', 'chart', 'Reports') + '</div>';
+      tool('tab', 'history', 'history', 'History', '', 'c-blue') + tool('tab', 'customers', 'customers', 'Customers', '', 'c-teal') + tool('tab', 'agents', 'agents', 'Agents', '', 'c-purple') +
+      tool('go', 'risk', 'risk', 'Risk', rk.high || '', 'c-orange') + tool('go', 'share', 'chat', 'Reminders', '', 'c-blue') + tool('go', 'daily', 'cash', 'Cash Check', '', 'c-teal') +
+      tool('go', 'recon', 'recon', 'Monthly Check', '', 'c-blue') + tool('go', 'capital', 'capital', 'Capital', '', 'c-purple') + tool('go', 'comm', 'comm', 'Commissions', '', 'c-teal') +
+      tool('go', 'ref', 'customers', 'Referrals', '', 'c-blue') + tool('go', 'expenses', 'expense', 'Money Out', '', 'c-orange') + tool('go', 'losses', 'loss', 'Losses', '', 'c-orange') +
+      tool('go', 'reports', 'chart', 'Reports', '', 'c-blue') + '</div>';
     return h;
   };
   VIEWS.reports = function () {
@@ -784,17 +787,17 @@
     h += '<div class="profile-card"><div class="avatar">' + esc((p.name || '?').trim().charAt(0).toUpperCase()) + '</div><div class="pc-tx"><b>' + esc(p.name || 'Add your name') + '</b>' +
       '<small>' + esc((c.name || '') + (ss.email ? ' · ' + ss.email : '')) + '</small></div><button class="btn" data-act="go" data-v="profile">Edit</button></div>';
     h += '<div class="section-title">Account and Security</div><div class="slist">' +
-      srow('go', 'sync', 'account', 'Your Account', ss.signedIn ? ss.label : ss.configured ? 'Sign in to keep records online' : 'Keep your records online', 'blue') +
+      srow('go', 'sync', 'account', 'Your Account', ss.signedIn ? ss.label : ss.configured ? 'Sign in to keep records online' : 'Keep your records online', 'purple') +
       srow('go', 'security', 'lock', 'Security', Security.enabled() ? 'PIN on' + (Security.bioEnabled() ? ', fingerprint on' : '') : 'Protect your records with a PIN', 'red') + '</div>';
     h += '<div class="section-title">Look and Money</div><div class="slist">' +
-      srow('go', 'look', 'look', 'Country, Currency and Theme', (c.name || '') + ' · ' + S.settings.currency.symbol + ' · ' + (THEMES.list[S.settings.theme] || THEMES.list.classic).name, 'green') +
-      srow('go', 'rules', 'rules', 'Money Rules', 'Tips and how you record payments', 'green') +
-      srow('go', 'language', 'globe', 'Language', I18N.pref === 'auto' ? 'Phone language (' + I18N.names[I18N.lang] + ')' : I18N.names[I18N.lang], 'green') +
-      srow('go', 'choices', 'list', 'Your Choices', 'Payment channels, wallets, EVC operators and other lists', 'green') + '</div>';
+      srow('go', 'look', 'look', 'Country, Currency and Theme', (c.name || '') + ' · ' + S.settings.currency.symbol + ' · ' + (THEMES.list[S.settings.theme] || THEMES.list.classic).name, 'teal') +
+      srow('go', 'rules', 'rules', 'Money Rules', 'Tips and how you record payments', 'teal') +
+      srow('go', 'language', 'globe', 'Language', I18N.pref === 'auto' ? 'Phone language (' + I18N.names[I18N.lang] + ')' : I18N.names[I18N.lang], 'teal') +
+      srow('go', 'choices', 'list', 'Your Choices', 'Payment channels, wallets, EVC operators and other lists', 'teal') + '</div>';
     h += '<div class="section-title">Your Data</div><div class="slist">' +
-      srow('go', 'backup', 'backup', 'Backup and Restore', S.meta.lastBackup ? 'Last backup ' + shortDate(S.meta.lastBackup) : 'Save a copy of your records', 'blue') +
-      srow('openPrivacy', 'privacy', 'privacy', 'Privacy Policy', 'How your records are protected', 'blue') +
-      srow('go', 'help', 'help', 'How It Works', 'Balances, credit, tips, statuses', 'blue') + '</div>';
+      srow('go', 'backup', 'backup', 'Backup and Restore', S.meta.lastBackup ? 'Last backup ' + shortDate(S.meta.lastBackup) : 'Save a copy of your records', 'orange') +
+      srow('openPrivacy', 'privacy', 'privacy', 'Privacy Policy', 'How your records are protected', 'orange') +
+      srow('go', 'help', 'help', 'How It Works', 'Balances, credit, tips, statuses', 'orange') + '</div>';
     if (Security.enabled()) h += '<button class="btn block" data-act="lockNow" style="margin-top:14px">Lock the App Now</button>';
     if (deferredInstall) h += '<button class="btn kiosk block" data-act="install" style="margin-top:10px">Install This App on Your Phone</button>';
     h += '<p class="hint" style="text-align:center;margin-top:16px">' + esc(APP_NAME) + ' · Your records are private to you.</p>';
@@ -2358,7 +2361,21 @@
   }
 
   /* ================= Events ================= */
-  function renderList() { var el = document.getElementById('list'); if (el && LISTS[cur().v]) el.innerHTML = LISTS[cur().v](); }
+  var ROW_ICON = { editExpense: 'expense', editError: 'loss', openCheck: 'cash', editWallet: 'comm', editEvc: 'comm' };
+  function decorateRows() {
+    var rows = document.querySelectorAll('.row:not(.has-av)');
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i], n = r.querySelector('.name'), act = r.getAttribute('data-act'), a = document.createElement('span');
+      a.className = 'av'; a.setAttribute('aria-hidden', 'true');
+      if (ROW_ICON[act] || !n) { a.className += ' ico'; a.innerHTML = icon(ROW_ICON[act] || 'list'); }
+      else {
+        var w = n.textContent.replace(/[^A-Za-z\u00C0-\u024F0-9 ]/g, ' ').trim().split(/\s+/).filter(Boolean);
+        a.textContent = ((w[0] || '?')[0] + (w.length > 1 ? w[w.length - 1][0] : '')).toUpperCase();
+      }
+      r.classList.add('has-av'); r.insertBefore(a, r.firstChild);
+    }
+  }
+  function renderList() { var el = document.getElementById('list'); if (el && LISTS[cur().v]) { el.innerHTML = LISTS[cur().v](); decorateRows(); } }
   function saveLocalOnly() { return Store.set(S); }
   document.addEventListener('click', function (e) {
     var el = e.target.closest('[data-act]'); if (!el) return;
