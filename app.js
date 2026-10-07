@@ -2898,7 +2898,6 @@
         '<button class="btn block" data-act="capAlerts">' + (st.alerts ? 'Turn Off Alerts' : 'Turn On Alerts') + '</button></div>';
     } else {
       h += '<div class="card"><b>Share a message to the app</b><p class="hint">Press and hold a payment SMS or notification, tap Share, then choose Agent &amp; Client Tracker. Or copy it and tap Message on the home screen.</p></div>';
-      h += '<div class="card"><b>Fully automatic</b><p class="hint">Reading payment notifications by itself needs the Android app.</p><button class="btn primary block" data-act="capGetApp">Get the Android App</button></div>';
     }
     h += '<button class="btn block" data-act="captureOpen" style="margin-bottom:10px">Record from a Message Now</button>';
     if (waiting) h += '<button class="btn kiosk block" data-act="capInbox">Messages to Record (' + waiting + ')</button>';
