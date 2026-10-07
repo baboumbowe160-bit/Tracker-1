@@ -41,7 +41,7 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.9'
+          gradle-version: '8.13'
 
       - name: Write the Android project
         run: |
@@ -61,7 +61,7 @@ jobs:
           EOF
 
           cat > android/build.gradle <<'EOF'
-          plugins { id 'com.android.application' version '8.5.2' apply false }
+          plugins { id 'com.android.application' version '8.11.1' apply false }
           EOF
 
           cat > android/gradle.properties <<'EOF'
@@ -73,11 +73,11 @@ jobs:
           plugins { id 'com.android.application' }
           android {
             namespace 'com.baboumbowe.agentclienttracker.app'
-            compileSdk 34
+            compileSdk 36
             defaultConfig {
               applicationId 'com.baboumbowe.agentclienttracker.app'
               minSdk 24
-              targetSdk 34
+              targetSdk 36
               versionCode Integer.parseInt(System.getenv('VERSION_CODE') ?: '1')
               versionName System.getenv('VERSION_NAME') ?: '1.0'
             }
@@ -189,6 +189,7 @@ jobs:
           import android.content.ClipData;
           import android.content.Intent;
           import android.net.Uri;
+          import android.graphics.Color;
           import android.os.Bundle;
           import android.util.Base64;
           import android.webkit.JavascriptInterface;
@@ -199,6 +200,7 @@ jobs:
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
+          import android.widget.FrameLayout;
           import android.widget.Toast;
 
           import androidx.activity.OnBackPressedCallback;
@@ -208,6 +210,11 @@ jobs:
           import androidx.biometric.BiometricPrompt;
           import androidx.core.content.ContextCompat;
           import androidx.core.content.FileProvider;
+          import androidx.core.graphics.Insets;
+          import androidx.core.view.ViewCompat;
+          import androidx.core.view.WindowCompat;
+          import androidx.core.view.WindowInsetsCompat;
+          import androidx.core.view.WindowInsetsControllerCompat;
           import androidx.webkit.WebViewAssetLoader;
 
           import org.json.JSONObject;
@@ -232,7 +239,21 @@ jobs:
             protected void onCreate(Bundle state) {
               super.onCreate(state);
               web = new WebView(this);
-              setContentView(web);
+              /* Draw edge to edge (required on new Android) and keep the app clear of the
+                 status bar, the navigation bar and the keyboard. */
+              WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+              final FrameLayout root = new FrameLayout(this);
+              root.setBackgroundColor(Color.WHITE);
+              root.addView(web, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+              setContentView(root);
+              WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(getWindow(), root);
+              bars.setAppearanceLightStatusBars(true);
+              bars.setAppearanceLightNavigationBars(true);
+              ViewCompat.setOnApplyWindowInsetsListener(root, (v, insets) -> {
+                Insets b = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout() | WindowInsetsCompat.Type.ime());
+                v.setPadding(b.left, b.top, b.right, b.bottom);
+                return WindowInsetsCompat.CONSUMED;
+              });
 
               final WebViewAssetLoader loader = new WebViewAssetLoader.Builder()
                   .setDomain(HOST)
@@ -501,26 +522,34 @@ jobs:
           export VERSION_CODE=$((100 + GITHUB_RUN_NUMBER))
           export VERSION_NAME="1.${GITHUB_RUN_NUMBER}"
           cd android
-          if ! gradle --no-daemon --stacktrace assembleRelease > "$RUNNER_TEMP/gradle.log" 2>&1; then
+          if ! gradle --no-daemon --stacktrace assembleRelease bundleRelease > "$RUNNER_TEMP/gradle.log" 2>&1; then
             cat "$RUNNER_TEMP/gradle.log"
             report "$RUNNER_TEMP/gradle.log" "error|Error|What went wrong|FAILURE|Could not|> |Caused by|failed" "Build failed"
             exit 1
           fi
           tail -n 20 "$RUNNER_TEMP/gradle.log"
           cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/agent-client-tracker-app.apk"
+          cp app/build/outputs/bundle/release/app-release.aab "$GITHUB_WORKSPACE/agent-client-tracker-app-play-store.aab"
           rm -f "$RUNNER_TEMP/release.jks"
 
       - name: Keep a copy of the APK on this run
         uses: actions/upload-artifact@v4
         with:
           name: agent-client-tracker-app
-          path: agent-client-tracker-app.apk
+          path: |
+            agent-client-tracker-app.apk
+            agent-client-tracker-app-play-store.aab
 
       - name: Publish the APK as a download
         uses: softprops/action-gh-release@v2
         with:
           tag_name: app-v${{ github.run_number }}
           name: Android app ${{ github.run_number }}
-          body: Self-contained Android app. Download agent-client-tracker-app.apk below and open it on your phone.
-          files: agent-client-tracker-app.apk
+          body: |
+            Self-contained Android app.
+            Phones: download agent-client-tracker-app.apk and open it.
+            Google Play: agent-client-tracker-app-play-store.aab is the file to upload in Play Console.
+          files: |
+            agent-client-tracker-app.apk
+            agent-client-tracker-app-play-store.aab
           make_latest: true
