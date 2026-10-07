@@ -172,7 +172,7 @@
     share: 'Send a Reminder', daily: 'Daily Cash Check', recon: 'Monthly Balance Check', losses: 'Losses and Errors',
     comm: 'Commissions', ref: 'Referral Agents', capital: 'Capital Portfolio', backup: 'Backup and Restore',
     choices: 'Your Choices', help: 'How It Works', sync: 'Your Account', risk: 'Risk Check', security: 'Security',
-    look: 'Country, Currency and Theme', rules: 'Money Rules', expenses: 'Expenses and Money Out', profile: 'Your Details' };
+    capture: 'Automatic Recording', look: 'Country, Currency and Theme', rules: 'Money Rules', expenses: 'Expenses and Money Out', profile: 'Your Details' };
   function cur() { return UI.stack[UI.stack.length - 1]; }
   function go(v) { UI.stack.push(v); history.pushState({ n: UI.stack.length }, ''); render(); window.scrollTo(0, 0); }
   function setTab(t) { UI.stack = [{ v: t }]; UI.limit = 120; render(); window.scrollTo(0, 0); }
@@ -528,6 +528,7 @@
     root.innerHTML = top + '<main>' + body + '</main>' + navBar() + fab(v);
     if (LISTS[v.v]) renderList();
     decorateRows(); enhancePickers(root);
+    if (UI.pendingShare && !UI.sheetOpen) { var ps = UI.pendingShare; UI.pendingShare = null; setTimeout(function () { openCapture(ps.text, ps.id, ps.when); }, 60); }
   }
   function navBar() {
     var t = UI.stack[0].v;
@@ -589,13 +590,15 @@
     h += '<div class="hero"><div class="hero-top"><div><div class="hello">' + (name ? 'Welcome, <b>' + esc(name) + '</b>' : 'Welcome') + '</div><div class="hdate">' + esc(readable(today)) + '</div></div>' +
       '<span class="hero-count"><b>' + dayNow.count + '</b> ' + (dayNow.count === 1 ? 'entry today' : 'entries today') + '</span></div>' +
       '<div class="label">Money received today</div><div class="big">' + money(dayNow.received) + '</div>' +
-      '<button class="btn-new" data-act="newSale"><span class="plus">+</span><span>New Sale</span></button></div>';
+      '<div class="hero-acts"><button class="btn-new" data-act="newSale"><span class="plus">+</span><span>New Sale</span></button>' +
+      '<button class="btn-msg" data-act="captureOpen" aria-label="Record from a message">' + icon('chat') + '<span>Message</span></button></div></div>';
     h += '<div class="shortcuts">' + sc('newPayment', 'pay', 'Payment', '', 'c-green') + sc('newAgent', 'agents', 'Agent', '', 'c-purple') + sc('newExpense', 'expense', 'Money Out', '', 'c-orange') +
       sc('newCapital', 'cash', 'Balances', '', 'c-teal') + sc('go', 'chat', 'Reminder', 'share', 'c-blue') + '</div>';
     h += '<div class="owed"><button data-act="custFilterGo" data-v="owing"><span class="lab">To Collect</span><b class="c-owed">' + money(r2(t.owed + ag.collect)) + '</b>' +
       '<small>' + owing + ' ' + (owing === 1 ? 'customer' : 'customers') + ' · ' + ag.n + ' ' + (ag.n === 1 ? 'agent' : 'agents') + '</small></button>' +
       '<button data-act="tab" data-v="agents"><span class="lab">To Pay</span><b>' + money(r2(t.credit + ag.pay)) + '</b><small>Agents and advance payments</small></button></div>';
-    var chips = '';
+    var chips = '', waiting = inboxGet().length;
+    if (waiting) chips += '<button class="chipa msg" data-act="capInbox">' + icon('chat') + '<span>' + waiting + (waiting === 1 ? ' message to record' : ' messages to record') + '</span></button>';
     if (R.risk.alerts.length) chips += '<button class="chipa warn" data-act="go" data-v="risk">' + icon('risk') + '<span>' + R.risk.alerts.length + (R.risk.alerts.length === 1 ? ' risk alert' : ' risk alerts') + '</span></button>';
     if (t.overdue) chips += '<button class="chipa" data-act="salesFilterGo" data-v="overdue">' + icon('history') + '<span>' + t.overdue + ' overdue</span></button>';
     if (chips) h += '<div class="chipline">' + chips + '</div>';
@@ -927,6 +930,7 @@
       srow('go', 'look', 'look', 'Country, Currency and Theme', (c.name || '') + ' · ' + S.settings.currency.symbol + ' · ' + (THEMES.list[S.settings.theme] || THEMES.list.classic).name, 'teal') +
       srow('go', 'rules', 'rules', 'Money Rules', 'Tips and how you record payments', 'teal') +
       srow('go', 'language', 'globe', 'Language', I18N.pref === 'auto' ? 'Phone language (' + I18N.names[I18N.lang] + ')' : I18N.names[I18N.lang], 'teal') +
+      srow('go', 'capture', 'chat', 'Automatic Recording', 'Turn payment messages into entries', 'teal') +
       srow('go', 'choices', 'list', 'Your Choices', 'Payment channels, wallets, EVC operators and other lists', 'teal') + '</div>';
     h += '<div class="section-title">Your Data</div><div class="slist">' +
       srow('go', 'backup', 'backup', 'Backup and Restore', S.meta.lastBackup ? 'Last backup ' + shortDate(S.meta.lastBackup) : 'Save a copy of your records', 'orange') +
@@ -1882,6 +1886,7 @@
     var kept = {}; (F.schema.keep || []).forEach(function (k) { kept[k] = vals[k]; });
     if (vals.channel) S.meta.lastChannel = vals.channel;
     Object.keys(vals).forEach(function (k) { if (k.indexOf('__') === 0) delete vals[k]; });
+    if (F.captureId) inboxRemove(F.captureId);
     var savedId = '';
     if (F.type === 'capital') savedId = saveCapital(vals);
     else if (F.isNew) { recordMeta(F, vals); S[F.schema.coll].push(vals); }
@@ -2519,6 +2524,7 @@
   });
   document.addEventListener('input', function (e) {
     var t = e.target;
+    if (t.id === 'cap-text') { capRefresh(); return; }
     if (t.id === 'q-hist') { UI.hQuery = t.value; UI.limit = 120; renderList(); return; }
     if (t.id === 'q-cust') { UI.custQuery = t.value; renderList(); return; }
     if (t.id === 'q-agents') { UI.agentQuery = t.value; UI.limit = 120; renderList(); return; }
@@ -2743,6 +2749,163 @@
     });
   }
 
+
+  /* ================= Recording from wallet and bank messages =================
+     A message can arrive three ways: pasted, shared to the app, or read from notifications by the Android app.
+     Each one opens "Record from a Message", which shows what was read and opens a filled-in entry to check and save. */
+  var INBOX_KEY = 'capture-inbox';
+  function inboxGet() { try { return JSON.parse(localStorage.getItem(INBOX_KEY) || '[]') || []; } catch (e) { return []; } }
+  function inboxSet(a) { try { localStorage.setItem(INBOX_KEY, JSON.stringify(a.slice(-100))); } catch (e) {} }
+  function inboxRemove(id) { if (id) inboxSet(inboxGet().filter(function (x) { return x.id !== id; })); }
+  function pullCaptured() {
+    if (!NATIVE || !NATIVE.takeCaptured || !window.Capture) return;
+    var raw = []; try { raw = JSON.parse(NATIVE.takeCaptured() || '[]') || []; } catch (e) { raw = []; }
+    if (!raw.length) return;
+    var a = inboxGet(), seen = {}; a.forEach(function (x) { seen[x.id] = 1; });
+    raw.forEach(function (x) { if (x && x.text && !seen[x.id] && Capture.looksLikeMoney(x.text)) { seen[x.id] = 1; a.push({ id: x.id, text: x.text, app: x.app || '', when: x.when || Date.now() }); } });
+    inboxSet(a);
+    if (!UI.sheetOpen) render();
+  }
+  function pullShared() {
+    if (!NATIVE || !NATIVE.getSharedText) return;
+    var t = ''; try { t = NATIVE.getSharedText() || ''; } catch (e) { t = ''; }
+    if (t) { UI.pendingShare = { text: t }; if (!UI.sheetOpen) render(); }
+  }
+  window.__captureArrived = pullCaptured;
+  window.__sharedArrived = pullShared;
+  (function () {   // shared from another app to the website version (installed web app)
+    try {
+      var q = new URLSearchParams(location.search), t = [q.get('title'), q.get('text'), q.get('url')].filter(Boolean).join(' ').trim();
+      if (t) { UI.pendingShare = { text: t }; history.replaceState(null, '', location.pathname); }
+    } catch (e) {}
+  })();
+
+  function capPerson(r) {
+    var p = r.phone ? C.parsePhone(r.phone, S.settings.profile.country) : null, phone = p && p.ok ? p.value : '';
+    var c = phone ? findCustomer(C.custKey({ phone: phone })) : null;
+    var key = phone.replace(/\D/g, '').slice(-7), ag = null;
+    if (key) R.agents.balances.forEach(function (a) { if (!ag && String(a.phone || '').replace(/\D/g, '').slice(-7) === key) ag = a; });
+    return { phone: phone, customer: c, agent: ag, name: c ? c.name : ag ? ag.name : r.name };
+  }
+  function capChannel(r) {
+    if (!r.provider) return {};
+    return r.provider.kind === 'bank' ? { channel: 'Bank Transfer', bank: r.provider.name } : { channel: r.provider.name };
+  }
+  function capNote(r) { return [r.provider ? r.provider.name : '', r.ref ? 'Ref ' + r.ref : ''].filter(Boolean).join(' · '); }
+  function capRow(label, value) { return value ? '<div class="caprow"><span>' + esc(label) + '</span><b>' + value + '</b></div>' : ''; }
+  function capCard(r) {
+    var who = capPerson(r), dir = r.direction === 'in' ? '<span class="pill p-paid">Money in</span>' : r.direction === 'out' ? '<span class="pill p-overdue">Money out</span>' : '<span class="pill">Check: in or out?</span>';
+    return '<div class="capcard"><div class="caphead">' + (r.provider ? provBadge(r.provider.name, 'lg') + '<b>' + esc(r.provider.name) + '</b>' : '<span class="pbadge g-none lg">' + icon('chat') + '</span><b>Message</b>') + dir + '</div>' +
+      '<div class="capamt' + (r.direction === 'out' ? ' out' : '') + '">' + (r.amount != null ? money(r.amount) : '<span class="hint">No amount found. Type it in the entry.</span>') + '</div>' +
+      capRow('Number', r.phone ? esc(phoneLine(who.phone || r.phone)) : '') +
+      capRow(who.customer ? 'Customer' : who.agent ? 'Agent' : 'Name', who.name ? esc(who.name) + (who.customer && who.customer.owed > 0 ? ' <em class="c-owed">owes ' + esc(money(who.customer.owed)) + '</em>' : '') : '') +
+      capRow('Reference', r.ref ? esc(r.ref) : '') + capRow('Fee', r.fee != null ? esc(money(r.fee)) : '') + capRow('Balance after', r.balance != null ? esc(money(r.balance)) : '') +
+      capRow('When', esc(dayShort(r.date) + ', ' + r.time)) + '</div>';
+  }
+  function capOpt(act, ic, col, title, sub) {
+    return '<button type="button" class="capopt" data-act="' + act + '"><span class="ic ' + col + '">' + icon(ic) + '</span><span class="tx"><b>' + esc(title) + '</b><small>' + esc(sub) + '</small></span><span class="chev">›</span></button>';
+  }
+  function capActions(r) {
+    var who = capPerson(r), owes = who.customer && who.customer.owed > 0;
+    var ins = (owes ? capOpt('capPayment', 'pay', 'c-green', 'Payment of a Debt', who.name + ' is paying what they owe') : '') +
+      capOpt('capSale', 'sales', 'c-blue', 'New Sale, Paid', 'A customer paid for data, airtime or a deposit') +
+      (owes ? '' : capOpt('capPayment', 'pay', 'c-green', 'Payment of a Debt', 'A customer paying for an earlier sale')) +
+      capOpt('capAgentIn', 'agents', 'c-purple', 'Received from an Agent', 'An agent sent you money or float');
+    var outs = capOpt('capAgentOut', 'agents', 'c-purple', 'Paid to an Agent', 'You sent money or float to an agent') +
+      capOpt('capExchange', 'recon', 'c-teal', 'Wallet Exchange', 'You sent money to a customer\'s wallet or bank') +
+      capOpt('capExpense', 'expense', 'c-orange', 'Money Out', 'Rent, transport, purchases or other spending');
+    if (r.direction === 'in') return '<div class="sec-head"><b>Record it as</b></div>' + ins;
+    if (r.direction === 'out') return '<div class="sec-head"><b>Record it as</b></div>' + outs;
+    return '<div class="sec-head"><b>Money in</b></div>' + ins + '<div class="sec-head"><b>Money out</b></div>' + outs;
+  }
+  function openCapture(text, id, when) {
+    UI.cap = { id: id || '', when: when || 0 };
+    var canPaste = !!(navigator.clipboard && navigator.clipboard.readText);
+    var body = '<div class="field"><label for="cap-text">Message from your wallet or bank</label>' +
+      '<textarea id="cap-text" rows="4" placeholder="Paste the SMS or notification here">' + esc(text || '') + '</textarea></div>' +
+      (canPaste ? '<button type="button" class="btn block capbtn" data-act="capPaste">' + icon('rules') + '<span>Paste the Copied Message</span></button>' : '') +
+      '<div id="cap-out"></div>';
+    openSheet('Record from a Message', body, '<button class="btn" data-act="closeSheet">Cancel</button>');
+    capRefresh();
+  }
+  function capRefresh() {
+    var t = document.getElementById('cap-text'), out = document.getElementById('cap-out'); if (!t || !out || !window.Capture) return;
+    var txt = t.value.trim();
+    if (!txt) { out.innerHTML = '<p class="hint" style="margin-top:12px">Copy the message in your SMS or wallet app, then tap Paste. You check the entry before it is saved.</p>'; UI.capParsed = null; return; }
+    var r = Capture.parse(txt, { when: UI.cap && UI.cap.when }); UI.capParsed = r;
+    out.innerHTML = capCard(r) + capActions(r);
+  }
+  function capOpen(type, prefill) {
+    var r = UI.capParsed; if (!r) return;
+    var base = { date: r.date, time: r.time };
+    openForm(type, null, { prefill: Object.assign(base, prefill), captureId: UI.cap && UI.cap.id });
+  }
+  function capAmt(r) { return r.amount != null ? r.amount : ''; }
+  Object.assign(ACT, {
+    captureOpen: function () { openCapture(''); },
+    capPaste: function () {
+      navigator.clipboard.readText().then(function (t) { var el = document.getElementById('cap-text'); if (el) { el.value = t || ''; capRefresh(); } })
+        .catch(function () { toast('Press and hold the box, then tap Paste.'); var el = document.getElementById('cap-text'); if (el) el.focus(); });
+    },
+    capSale: function () { var r = UI.capParsed, w = capPerson(r); capOpen('sale', Object.assign({ kind: 'DS', phone: w.phone, name: w.name, billed: capAmt(r), payMode: 'full', notes: capNote(r) }, capChannel(r))); },
+    capPayment: function () { var r = UI.capParsed, w = capPerson(r); capOpen('payment', Object.assign({ phone: w.phone, name: w.name, received: capAmt(r), notes: capNote(r) }, capChannel(r))); },
+    capAgentIn: function () { var r = UI.capParsed, w = capPerson(r); capOpen('agent', { name: w.agent ? w.agent.name : w.name, phone: w.phone, fromAgent: capAmt(r), desc: capNote(r) }); },
+    capAgentOut: function () { var r = UI.capParsed, w = capPerson(r); capOpen('agent', { name: w.agent ? w.agent.name : w.name, phone: w.phone, toAgent: capAmt(r), desc: capNote(r) }); },
+    capExchange: function () { var r = UI.capParsed, w = capPerson(r); capOpen('sale', { kind: 'WE', phone: w.phone, name: w.name, billed: capAmt(r), costOut: capAmt(r), payMode: 'full', notes: 'Sent ' + capNote(r) }); },
+    capExpense: function () {
+      var r = UI.capParsed, from = r.provider && (S.settings.capitalAccounts || []).indexOf(r.provider.name) >= 0 ? r.provider.name : '';
+      capOpen('expense', { amount: capAmt(r), paidFrom: from, note: capNote(r) });
+    },
+    capInbox: function () { openInbox(); },
+    capFromInbox: function (d) { var it = inboxGet().filter(function (x) { return x.id === d.id; })[0]; if (it) openCapture(it.text, it.id, it.when); },
+    capIgnore: function (d) { inboxRemove(d.id); if (inboxGet().length) openInbox(); else { closeSheet(); render(); } },
+    capIgnoreAll: function () { if (!confirm('Ignore all waiting messages?')) return; inboxSet([]); closeSheet(); render(); },
+    capAppInfo: function () { if (NATIVE && NATIVE.openAppInfo) NATIVE.openAppInfo(); },
+    capSettings: function () { if (NATIVE && NATIVE.openCaptureSettings) NATIVE.openCaptureSettings(); },
+    capAlerts: function () { if (NATIVE && NATIVE.setAlerts) { var st = captureStatus(); NATIVE.setAlerts(!st.alerts); setTimeout(render, 600); } },
+    capGetApp: function () {
+      var u = 'https://github.com/baboumbowe160-bit/Tracker-1/releases/latest/download/agent-client-tracker-app.apk';
+      if (NATIVE) NATIVE.openUrl(u); else window.open(u, '_blank');
+    }
+  });
+  function openInbox() {
+    var items = inboxGet().slice().reverse();
+    var body = items.length ? items.map(function (x) {
+      var r = Capture.parse(x.text, { when: x.when, app: x.app });
+      return '<div class="inboxitem"><div class="caphead">' + (r.provider ? provBadge(r.provider.name) : '<span class="pbadge g-none">' + icon('chat') + '</span>') +
+        '<div class="tx"><b>' + (r.amount != null ? esc(money(r.amount)) : esc(r.provider ? r.provider.name : (x.app || 'Message'))) + '</b><small>' +
+        esc((r.direction === 'in' ? 'Money in' : r.direction === 'out' ? 'Money out' : 'Check') + ' · ' + dayShort(r.date) + ', ' + r.time) + '</small></div></div>' +
+        '<p class="inboxtext">' + esc(x.text.length > 160 ? x.text.slice(0, 160) + '…' : x.text) + '</p>' +
+        '<div class="inboxacts"><button class="btn" data-act="capIgnore" data-id="' + esc(x.id) + '">Ignore</button><button class="btn primary" data-act="capFromInbox" data-id="' + esc(x.id) + '">Record</button></div></div>';
+    }).join('') : '<p class="hint">No payment messages are waiting.</p>';
+    openSheet('Messages to Record', body, items.length ? '<button class="btn" data-act="capIgnoreAll">Ignore All</button>' : '<button class="btn" data-act="closeSheet">Close</button>');
+  }
+  function captureStatus() {
+    if (!NATIVE || !NATIVE.captureStatus) return { native: false };
+    try { var s = JSON.parse(NATIVE.captureStatus()); s.native = true; return s; } catch (e) { return { native: true }; }
+  }
+  VIEWS.capture = function () {
+    var st = captureStatus(), waiting = inboxGet().length, h = '';
+    if (st.native) {
+      h += '<div class="card"><div class="capset"><b>Read payment notifications</b>' + pill(st.listener ? 'On' : 'Off', st.listener ? 'p-paid' : 'p-outstanding') + '</div>' +
+        '<p class="hint">When a message from Wave, Afrimoney, QMoney, APS, your bank or your SMS app shows a payment, the app keeps it ready for you to record with one tap.</p>' +
+        '<button class="btn ' + (st.listener ? '' : 'primary') + ' block" data-act="capSettings">' + (st.listener ? 'Change in Phone Settings' : 'Turn On in Phone Settings') + '</button>' +
+        (st.listener ? '' : '<p class="hint" style="margin-top:8px">Turn on Agent &amp; Client Tracker in the page that opens.</p>' +
+          '<div class="banner" style="display:block"><b>Android says "Restricted setting"?</b><br>Tap Open App Info below, then the ⋮ menu at the top right, then Allow restricted settings. Come back and tap Turn On again.</div>' +
+          '<button class="btn block" data-act="capAppInfo" style="margin-top:8px">Open App Info</button>') + '</div>';
+      h += '<div class="card"><div class="capset"><b>Alert me</b>' + pill(st.alerts ? 'On' : 'Off', st.alerts ? 'p-paid' : 'p-outstanding') + '</div>' +
+        '<p class="hint">Shows a notification when a payment message is ready to record, even when the app is closed.</p>' +
+        '<button class="btn block" data-act="capAlerts">' + (st.alerts ? 'Turn Off Alerts' : 'Turn On Alerts') + '</button></div>';
+    } else {
+      h += '<div class="card"><b>Share a message to the app</b><p class="hint">Press and hold a payment SMS or notification, tap Share, then choose Agent &amp; Client Tracker. Or copy it and tap Message on the home screen.</p></div>';
+      h += '<div class="card"><b>Fully automatic</b><p class="hint">Reading payment notifications by itself needs the Android app.</p><button class="btn primary block" data-act="capGetApp">Get the Android App</button></div>';
+    }
+    h += '<button class="btn block" data-act="captureOpen" style="margin-bottom:10px">Record from a Message Now</button>';
+    if (waiting) h += '<button class="btn kiosk block" data-act="capInbox">Messages to Record (' + waiting + ')</button>';
+    h += '<p class="hint">Messages stay on this phone. Chats such as WhatsApp are never read. You always check an entry before it is saved.</p>';
+    return h;
+  };
+
   function importFile(file) {
     if (!file) return;
     var reader = new FileReader();
@@ -2796,6 +2959,7 @@
       var delay = Security.lockDelayMs();
       if (delay !== Infinity && Date.now() - UI.hiddenAt >= delay) { try { sessionStorage.removeItem('act-alive'); } catch (e) {} UI.locked = true; UI.pin = ''; UI.pinMsg = ''; UI.bioTried = false; render(); return; }
     }
+    pullCaptured(); pullShared();
     if (!UI.sheetOpen) { recompute(); render(); }
   }
   document.addEventListener('visibilitychange', function () { if (document.hidden) appHide(); else appShow(); });
@@ -2816,6 +2980,7 @@
     Security.init({ getS: function () { return S; }, saveLocal: function () { return Store.set(S); } });
     UI.locked = Security.enabled() && !resumeGrace();
     Security.bioSupported().then(function (ok) { UI.bioOK = ok; });
+    pullCaptured(); pullShared();
     recompute(); render();
     if (window.Sync) Sync.init({
       getS: function () { return S; },

@@ -971,3 +971,30 @@ I18N.add('fr', { "Mobile Money": "Mobile money", "Banks": "Banques", "Microfinan
 I18N.add('fr', { "Backup": "Sauvegarde", "Help": "Aide" });
 I18N.add('fr', { "Already saved": "Déjà enregistrés" });
 I18N.add('fr', { "All customers": "Tous les clients", "All agents": "Tous les agents", "Search name or number": "Chercher un nom ou un numéro", "No match. Close this and type the new name.": "Aucun résultat. Fermez et tapez le nouveau nom." });
+I18N.add('fr', {
+  "Message": "Message", "Record from a Message": "Enregistrer depuis un message", "Message from your wallet or bank": "Message de votre portefeuille ou banque",
+  "Paste the SMS or notification here": "Collez le SMS ou la notification ici", "Paste the Copied Message": "Coller le message copié",
+  "Copy the message in your SMS or wallet app, then tap Paste. You check the entry before it is saved.": "Copiez le message dans votre application SMS ou portefeuille, puis touchez Coller. Vous vérifiez la saisie avant qu'elle soit enregistrée.",
+  "Money in": "Entrée d'argent", "Money out": "Sortie d'argent", "Check: in or out?": "À vérifier : entrée ou sortie ?", "No amount found. Type it in the entry.": "Aucun montant trouvé. Tapez-le dans la saisie.",
+  "Number": "Numéro", "Name": "Nom", "Reference": "Référence", "Fee": "Frais", "Balance after": "Solde après", "When": "Quand", "Record it as": "L'enregistrer comme",
+  "Payment of a Debt": "Paiement d'une dette", "New Sale, Paid": "Nouvelle vente, payée", "A customer paid for data, airtime or a deposit": "Un client a payé internet, crédit ou un dépôt",
+  "A customer paying for an earlier sale": "Un client paie une vente précédente", "Received from an Agent": "Reçu d'un agent", "An agent sent you money or float": "Un agent vous a envoyé de l'argent ou du float",
+  "Paid to an Agent": "Payé à un agent", "You sent money or float to an agent": "Vous avez envoyé de l'argent ou du float à un agent",
+  "You sent money to a customer's wallet or bank": "Vous avez envoyé de l'argent au portefeuille ou à la banque d'un client", "Rent, transport, purchases or other spending": "Loyer, transport, achats ou autres dépenses",
+  "Messages to Record": "Messages à enregistrer", "No payment messages are waiting.": "Aucun message de paiement en attente.", "Ignore": "Ignorer", "Record": "Enregistrer", "Ignore All": "Tout ignorer",
+  "Ignore all waiting messages?": "Ignorer tous les messages en attente ?", "Check": "À vérifier", "Automatic Recording": "Enregistrement automatique", "Turn payment messages into entries": "Transformer les messages de paiement en saisies",
+  "Read payment notifications": "Lire les notifications de paiement",
+  "When a message from Wave, Afrimoney, QMoney, APS, your bank or your SMS app shows a payment, the app keeps it ready for you to record with one tap.": "Quand un message de Wave, Afrimoney, QMoney, APS, votre banque ou vos SMS indique un paiement, l'application le garde prêt à enregistrer en un geste.",
+  "Change in Phone Settings": "Modifier dans les réglages du téléphone", "Turn On in Phone Settings": "Activer dans les réglages du téléphone",
+  "Turn on Agent & Client Tracker in the page that opens.": "Activez Agent & Client Tracker dans la page qui s'ouvre.", "Android says \"Restricted setting\"?": "Android indique « Paramètre restreint » ?",
+  "Tap Open App Info below, then the ⋮ menu at the top right, then Allow restricted settings. Come back and tap Turn On again.": "Touchez Infos de l'application ci-dessous, puis le menu ⋮ en haut à droite, puis Autoriser les paramètres restreints. Revenez et touchez Activer à nouveau.",
+  "Open App Info": "Infos de l'application", "Alert me": "M'alerter", "Shows a notification when a payment message is ready to record, even when the app is closed.": "Affiche une notification quand un message de paiement est prêt à enregistrer, même si l'application est fermée.",
+  "Turn Off Alerts": "Désactiver les alertes", "Turn On Alerts": "Activer les alertes", "Share a message to the app": "Partager un message vers l'application",
+  "Press and hold a payment SMS or notification, tap Share, then choose Agent & Client Tracker. Or copy it and tap Message on the home screen.": "Appuyez longuement sur un SMS ou une notification de paiement, touchez Partager, puis choisissez Agent & Client Tracker. Ou copiez-le et touchez Message sur l'accueil.",
+  "Fully automatic": "Entièrement automatique", "Reading payment notifications by itself needs the Android app.": "La lecture automatique des notifications nécessite l'application Android.",
+  "Get the Android App": "Obtenir l'application Android", "Record from a Message Now": "Enregistrer depuis un message", "Press and hold the box, then tap Paste.": "Appuyez longuement sur la case, puis touchez Coller.",
+  "Messages stay on this phone. Chats such as WhatsApp are never read. You always check an entry before it is saved.": "Les messages restent sur ce téléphone. Les discussions comme WhatsApp ne sont jamais lues. Vous vérifiez toujours une saisie avant son enregistrement."
+}, [
+  [/^(\d+) messages? to record$/, "$1 message(s) à enregistrer"], [/^Messages to Record \((\d+)\)$/, "Messages à enregistrer ($1)"],
+  [/^(.+) is paying what they owe$/, "$1 paie ce qu'il doit"], [/^owes (.+)$/, "doit $1"]
+]);

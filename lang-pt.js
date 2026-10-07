@@ -971,3 +971,30 @@ I18N.add('pt', { "Mobile Money": "Dinheiro móvel", "Banks": "Bancos", "Microfin
 I18N.add('pt', { "Backup": "Cópia de segurança", "Help": "Ajuda" });
 I18N.add('pt', { "Already saved": "Já guardados" });
 I18N.add('pt', { "All customers": "Todos os clientes", "All agents": "Todos os agentes", "Search name or number": "Pesquisar nome ou número", "No match. Close this and type the new name.": "Sem resultados. Feche e escreva o novo nome." });
+I18N.add('pt', {
+  "Message": "Mensagem", "Record from a Message": "Registar a partir de uma mensagem", "Message from your wallet or bank": "Mensagem da sua carteira ou banco",
+  "Paste the SMS or notification here": "Cole aqui o SMS ou a notificação", "Paste the Copied Message": "Colar a mensagem copiada",
+  "Copy the message in your SMS or wallet app, then tap Paste. You check the entry before it is saved.": "Copie a mensagem na sua app de SMS ou carteira e toque em Colar. Verifica o registo antes de ser guardado.",
+  "Money in": "Entrada de dinheiro", "Money out": "Saída de dinheiro", "Check: in or out?": "Verificar: entrada ou saída?", "No amount found. Type it in the entry.": "Nenhum valor encontrado. Escreva-o no registo.",
+  "Number": "Número", "Name": "Nome", "Reference": "Referência", "Fee": "Taxa", "Balance after": "Saldo depois", "When": "Quando", "Record it as": "Registar como",
+  "Payment of a Debt": "Pagamento de uma dívida", "New Sale, Paid": "Nova venda, paga", "A customer paid for data, airtime or a deposit": "Um cliente pagou internet, saldo ou um depósito",
+  "A customer paying for an earlier sale": "Um cliente a pagar uma venda anterior", "Received from an Agent": "Recebido de um agente", "An agent sent you money or float": "Um agente enviou-lhe dinheiro ou float",
+  "Paid to an Agent": "Pago a um agente", "You sent money or float to an agent": "Enviou dinheiro ou float a um agente",
+  "You sent money to a customer's wallet or bank": "Enviou dinheiro para a carteira ou banco de um cliente", "Rent, transport, purchases or other spending": "Renda, transporte, compras ou outras despesas",
+  "Messages to Record": "Mensagens a registar", "No payment messages are waiting.": "Não há mensagens de pagamento à espera.", "Ignore": "Ignorar", "Record": "Registar", "Ignore All": "Ignorar todas",
+  "Ignore all waiting messages?": "Ignorar todas as mensagens à espera?", "Check": "Verificar", "Automatic Recording": "Registo automático", "Turn payment messages into entries": "Transformar mensagens de pagamento em registos",
+  "Read payment notifications": "Ler notificações de pagamento",
+  "When a message from Wave, Afrimoney, QMoney, APS, your bank or your SMS app shows a payment, the app keeps it ready for you to record with one tap.": "Quando uma mensagem da Wave, Afrimoney, QMoney, APS, do seu banco ou dos seus SMS mostra um pagamento, a app guarda-a pronta para registar com um toque.",
+  "Change in Phone Settings": "Alterar nas definições do telefone", "Turn On in Phone Settings": "Ativar nas definições do telefone",
+  "Turn on Agent & Client Tracker in the page that opens.": "Ative o Agent & Client Tracker na página que abre.", "Android says \"Restricted setting\"?": "O Android diz \"Definição restrita\"?",
+  "Tap Open App Info below, then the ⋮ menu at the top right, then Allow restricted settings. Come back and tap Turn On again.": "Toque em Informações da app abaixo, depois no menu ⋮ no canto superior direito e em Permitir definições restritas. Volte e toque em Ativar outra vez.",
+  "Open App Info": "Informações da app", "Alert me": "Avisar-me", "Shows a notification when a payment message is ready to record, even when the app is closed.": "Mostra uma notificação quando uma mensagem de pagamento está pronta a registar, mesmo com a app fechada.",
+  "Turn Off Alerts": "Desligar avisos", "Turn On Alerts": "Ligar avisos", "Share a message to the app": "Partilhar uma mensagem com a app",
+  "Press and hold a payment SMS or notification, tap Share, then choose Agent & Client Tracker. Or copy it and tap Message on the home screen.": "Toque sem soltar num SMS ou notificação de pagamento, toque em Partilhar e escolha Agent & Client Tracker. Ou copie-a e toque em Mensagem no início.",
+  "Fully automatic": "Totalmente automático", "Reading payment notifications by itself needs the Android app.": "Ler notificações de pagamento sozinho precisa da app Android.",
+  "Get the Android App": "Obter a app Android", "Record from a Message Now": "Registar a partir de uma mensagem", "Press and hold the box, then tap Paste.": "Toque sem soltar na caixa e depois em Colar.",
+  "Messages stay on this phone. Chats such as WhatsApp are never read. You always check an entry before it is saved.": "As mensagens ficam neste telefone. Conversas como o WhatsApp nunca são lidas. Verifica sempre um registo antes de ser guardado."
+}, [
+  [/^(\d+) messages? to record$/, "$1 mensagem(ns) a registar"], [/^Messages to Record \((\d+)\)$/, "Mensagens a registar ($1)"],
+  [/^(.+) is paying what they owe$/, "$1 está a pagar o que deve"], [/^owes (.+)$/, "deve $1"]
+]);
