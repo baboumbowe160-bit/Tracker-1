@@ -665,3 +665,8 @@ select.picked { display: none; }
 .prow.hide { display: none; }
 .qn { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: #fff; color: var(--blue); font-size: .72rem; font-weight: 800; }
 .picker h2 .qn { background: var(--blue-soft); vertical-align: middle; }
+/* Official logo instead of a badge */
+.pbadge.plogo { background: #fff; border-radius: 11px; box-shadow: 0 0 0 1px var(--line); overflow: hidden; padding: 0; }
+.pbadge.plogo img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.ptile .pbadge.plogo { border-radius: 13px; }
+.pbadge.plogo.xs { border-radius: 6px; }

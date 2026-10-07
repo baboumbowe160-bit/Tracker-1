@@ -494,6 +494,7 @@ jobs:
           A=android/app/src/main
           for f in web/*.html web/*.js web/*.css web/*.png web/*.webmanifest; do cp "$f" $A/assets/www/; done
           rm -f $A/assets/www/sw.js
+          if [ -d web/logos ]; then cp -r web/logos $A/assets/www/; fi
           test -f $A/assets/www/index.html || { echo "::error::index.html was not found in the repository"; exit 1; }
           cp web/icon-192.png $A/res/mipmap-xxxhdpi/ic_launcher.png
           cp web/icon-maskable-512.png $A/res/drawable-nodpi/ic_fg.png

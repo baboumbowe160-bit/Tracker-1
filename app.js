@@ -237,6 +237,8 @@
     'GTBank': 'GT', 'Mega Bank': 'MB', 'Trust Bank': 'TB', 'Vista Bank': 'VB', 'Zenith Bank': 'ZB', 'APS Islamic Microfinance': 'APS', 'Bayba Financial Services': 'BF',
     'Kolomoni Microfinance': 'KM', 'NACCUG Credit Union': 'NC', 'Reliance Financial Services': 'RF', 'Salam Financial Services': 'SF',
     'Yonna Islamic Microfinance': 'YM', 'VISACA (Village Bank)': 'VS' };
+  /* Official logos supplied by the owner, kept in the logos folder. Providers without one show their badge. */
+  var PROV_LOGO = { 'Wave': 'logos/wave.png' };
   var PROV_ICON = { 'Bank Transfer': 'bank', 'Microfinance': 'mfi', 'Cash': 'cash', 'Cash in Hand': 'cash' };
   var provIndex = null;
   function provGroup(name) {
@@ -258,6 +260,8 @@
     if (name === '__other') return '<span class="' + cls + '">' + icon('plus') + '</span>';
     if (name === '__none') return '<span class="pbadge g-none' + (size ? ' ' + size : '') + '">' + icon('list') + '</span>';
     if (PROV_ICON[name]) return '<span class="' + cls + '">' + icon(PROV_ICON[name]) + '</span>';
+    var logo = PROV_LOGO[name] || PROV_LOGO[Object.keys(PROV_LOGO).filter(function (k) { return k.toLowerCase() === String(name).toLowerCase(); })[0]];
+    if (logo) return '<span class="pbadge plogo' + (size ? ' ' + size : '') + '"><img src="' + logo + '" alt="" loading="lazy" decoding="async"></span>';
     return '<span class="' + cls + '" aria-hidden="true">' + esc(provCode(name)) + '</span>';
   }
   function syncPick(sel) {
