@@ -1688,23 +1688,14 @@
   }
 
   var FORM = null;
-  function datalists() {
-    var names = {}, phones = {}, agents = {}, refAgents = {}, home = S.settings.profile.country;
-    R.customers.forEach(function (c) {
-      if (c.name) names[c.name] = 1;
-      var p = C.phoneInfo(c.phone); if (!p.empty) phones[p.iso === home || !p.iso ? p.local : '+' + String(c.phone).replace(/\D/g, '')] = c.name;
-    });
-    R.agents.balances.forEach(function (a) { agents[a.name] = 1; refAgents[a.name] = 1; });
-    R.referrals.rows.forEach(function (r) { if (r.agent) refAgents[String(r.agent).trim()] = 1; });
-    function dl(id, obj, labels) { return '<datalist id="' + id + '">' + Object.keys(obj).map(function (k) { return '<option value="' + esc(k) + '"' + (labels && obj[k] ? ' label="' + esc(obj[k]) + '"' : '') + '></option>'; }).join('') + '</datalist>'; }
-    return dl('custNames', names) + dl('custPhones', phones, true) + dl('agentNames', agents) + dl('refAgents', refAgents);
-  }
+  // The phone's own suggestion list was replaced by suggestions while typing (see showSuggest).
+  function datalists() { return ''; }
   function fieldHTML(f, vals) {
     var v = vals[f.k]; if (v == null) v = '';
     var id = 'f_' + f.k, hide = f.show && !f.show(vals) ? ' hide' : '', text = labelOf(f, vals), req = isReq(f, vals) || f.req ? ' *' : '';
     var lab = text ? '<label for="' + id + '">' + esc(text) + req + '</label>' : '';
     var note = f.note ? '<div class="note">' + esc(f.note) + '</div>' : '';
-    var list = f.list ? ' list="' + f.list + '"' : '';
+    var list = f.list ? ' data-suggest="' + SUGGEST_KIND[f.list] + '"' : '';
     if (f.t === 'seg') {
       return '<div class="field" data-field="' + f.k + '"><div class="seg">' + f.opts.map(function (o) {
         return '<button type="button" data-act="formSeg" data-k="' + f.k + '" data-v="' + esc(o[0]) + '" class="' + (v === o[0] ? 'on' : '') + '">' + esc(o[1]) + '</button>';
@@ -1976,8 +1967,8 @@
   function saleBatchRow(i) {
     return '<div class="batch-row"><div class="batch-head"><b>Sale ' + (i + 1) + '</b><button type="button" class="linkbtn" data-act="batchRemove">Remove</button></div>' + dateTimeRow() +
       '<div class="field"><label>Customer Phone</label><div class="telrow"><select class="ccsel b-cc" aria-label="Country of this number">' + ccOptions(S.settings.profile.country) + '</select>' +
-      '<input type="tel" inputmode="tel" class="b-phone" aria-label="Customer phone" list="custPhones" autocomplete="off"></div><div class="netline"></div></div>' +
-      '<div class="field"><label>Customer Name</label><input type="text" class="b-name" aria-label="Customer name" list="custNames" autocomplete="off"></div>' +
+      '<input type="tel" inputmode="tel" class="b-phone" aria-label="Customer phone" data-suggest="cust" autocomplete="off"></div><div class="netline"></div></div>' +
+      '<div class="field"><label>Customer Name</label><input type="text" class="b-name" aria-label="Customer name" data-suggest="cust" autocomplete="off"></div>' +
       '<div class="field"><label>Bundle, Deposit or Details</label><input type="text" class="b-details" aria-label="Details"></div>' +
       '<div class="two"><div class="field"><label>Amount</label><input type="number" step="any" inputmode="decimal" class="b-amount" aria-label="Amount"></div>' +
       '<div class="field"><label>How Was It Paid?</label><select class="b-pay" aria-label="How was it paid">' + payOptions(S.settings.payDefault || '') + '</select></div></div>' +
@@ -1986,7 +1977,7 @@
   }
   function agentBatchRow(i) {
     return '<div class="batch-row"><div class="batch-head"><b>Entry ' + (i + 1) + '</b><button type="button" class="linkbtn" data-act="batchRemove">Remove</button></div>' + dateTimeRow() +
-      '<div class="field"><label>Agent Name</label><input type="text" class="b-agent" aria-label="Agent name" list="agentNames" autocomplete="off"></div>' +
+      '<div class="field"><label>Agent Name</label><input type="text" class="b-agent" aria-label="Agent name" data-suggest="agent" autocomplete="off"></div>' +
       '<div class="field"><label>Transaction Type</label><select class="b-txtype" aria-label="Transaction type"><option value="">Choose</option>' + opts('agentTxTypes').map(function (x) { return '<option>' + esc(x) + '</option>'; }).join('') + '</select></div>' +
       '<div class="field"><label>Description</label><input type="text" class="b-desc" aria-label="Description"></div>' +
       '<div class="two"><div class="field"><label>Paid to Agent</label><input type="number" step="any" inputmode="decimal" class="b-to" aria-label="Paid to agent"></div>' +
@@ -2590,6 +2581,92 @@
       if (last) ['rate', 'retailRoy', 'wholesaleRoy'].forEach(function (k) { var el = sheet.querySelector('[name="' + k + '"]'); if (el && el.value === '' && last[k] !== '' && last[k] != null) el.value = last[k]; });
     }
   }
+
+  /* ================= Suggestions while typing =================
+     Replaces the phone's own list, which opened with every customer as soon as the box was tapped.
+     Nothing shows until a few letters or digits are typed, and only matching people are shown. */
+  var SUGGEST_KIND = { custNames: 'cust', custPhones: 'cust', agentNames: 'agent', refAgents: 'ref' };
+  function suggestPool(kind) {
+    if (kind === 'cust') return R.customers.filter(function (c) { return c.name || c.phone; }).map(function (c) { return { name: c.name || '', phone: c.phone || '' }; });
+    if (kind === 'agent') return R.agents.balances.map(function (a) { return { name: a.name, phone: a.phone || '' }; });
+    var seen = {}, out = [];
+    R.referrals.rows.slice().reverse().forEach(function (r) {
+      var n = String(r.agent || '').trim(), k = n.toLowerCase(); if (!n || seen[k]) return; seen[k] = 1; out.push({ name: n, phone: r.agentPhone || '' });
+    });
+    R.agents.balances.forEach(function (a) { var k = a.name.toLowerCase(); if (!seen[k]) { seen[k] = 1; out.push({ name: a.name, phone: a.phone || '' }); } });
+    return out;
+  }
+  function suggestMatches(inp) {
+    var kind = inp.getAttribute('data-suggest'), isTel = inp.type === 'tel', q = inp.value.trim().toLowerCase();
+    var pool = suggestPool(kind), hits;
+    if (isTel) {
+      var d = q.replace(/\D/g, ''); if (d.length < 3) return [];
+      hits = pool.filter(function (x) { return x.phone && String(x.phone).replace(/\D/g, '').indexOf(d) >= 0; });
+      if (hits.length === 1 && C.phoneInfo(hits[0].phone).local === inp.value.trim()) return [];
+    } else {
+      if (q.length < 2) return [];
+      hits = pool.filter(function (x) { return x.name.toLowerCase().indexOf(q) >= 0; });
+      hits.sort(function (a, b) {
+        var sa = (' ' + a.name.toLowerCase()).indexOf(' ' + q) >= 0 ? 0 : 1, sb = (' ' + b.name.toLowerCase()).indexOf(' ' + q) >= 0 ? 0 : 1;
+        return sa - sb || a.name.localeCompare(b.name);
+      });
+      if (hits.length && hits[0].name.toLowerCase() === q && (hits.length === 1 || hits[1].name.toLowerCase() !== q)) return [];
+    }
+    return hits.slice(0, 4);
+  }
+  function suggestBox(inp) {
+    var field = inp.closest('.field'); if (!field) return null;
+    var box = field.querySelector('.suggest');
+    if (!box) {
+      box = document.createElement('div'); box.className = 'suggest'; box.setAttribute('role', 'listbox');
+      var after = inp.closest('.telrow') || inp; after.parentNode.insertBefore(box, after.nextSibling);
+      box.addEventListener('mousedown', function (e) { e.preventDefault(); });   // keep the keyboard open while tapping
+      box.addEventListener('click', function (e) {
+        var b = e.target.closest('.sugg'); if (!b) return;
+        pickSuggestion(box._inp, box._hits[Number(b.getAttribute('data-i'))]);
+      });
+    }
+    return box;
+  }
+  function showSuggest(inp) {
+    var hits = suggestMatches(inp), box = suggestBox(inp); if (!box) return;
+    box._inp = inp; box._hits = hits;
+    if (!hits.length) { box.innerHTML = ''; box.classList.remove('on'); return; }
+    box.innerHTML = '<div class="sugg-head">Already saved</div>' + hits.map(function (x, i) {
+      var w = x.name.replace(/[^A-Za-zÀ-ɏ0-9 ]/g, ' ').trim().split(/\s+/).filter(Boolean);
+      var ini = ((w[0] || '?')[0] + (w.length > 1 ? w[w.length - 1][0] : '')).toUpperCase();
+      return '<button type="button" class="sugg" role="option" data-i="' + i + '"><span class="av">' + esc(ini) + '</span><span class="tx"><b>' + esc(x.name || 'No name') + '</b>' +
+        (x.phone ? '<small>' + esc(phoneLine(x.phone)) + '</small>' : '') + '</span></button>';
+    }).join('');
+    box.classList.add('on');
+  }
+  function hideSuggest(inp) {
+    var field = inp && inp.closest('.field'), box = field && field.querySelector('.suggest');
+    if (box) { box.classList.remove('on'); box.innerHTML = ''; }
+  }
+  function pickSuggestion(inp, x) {
+    if (!inp || !x) return;
+    var scope = inp.closest('.batch-row') || inp.closest('#sheetwrap') || document, kind = inp.getAttribute('data-suggest');
+    var others = scope.querySelectorAll('[data-suggest="' + kind + '"]'), nameEl = null, telEl = null;
+    for (var i = 0; i < others.length; i++) { if (others[i].type === 'tel') telEl = telEl || others[i]; else nameEl = nameEl || others[i]; }
+    if (inp.type === 'tel') telEl = inp; else nameEl = inp;
+    function fire(el) { el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }
+    if (nameEl && x.name && (nameEl === inp || !nameEl.value.trim())) { nameEl.value = x.name; fire(nameEl); }
+    if (telEl && x.phone && (telEl === inp || !telEl.value.trim())) { setTel(telBox(telEl), x.phone); fire(telEl); }
+    hideSuggest(inp);
+    if (telEl && telEl !== inp && !x.phone) telEl.focus();
+  }
+  document.addEventListener('input', function (e) {
+    var t = e.target; if (!t.getAttribute || !t.hasAttribute('data-suggest') || !e.isTrusted) return;
+    showSuggest(t);
+  });
+  document.addEventListener('focusout', function (e) {
+    var t = e.target; if (t.hasAttribute && t.hasAttribute('data-suggest')) setTimeout(function () { if (document.activeElement !== t) hideSuggest(t); }, 120);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && e.target.hasAttribute && e.target.hasAttribute('data-suggest')) hideSuggest(e.target);
+  });
+
   function importFile(file) {
     if (!file) return;
     var reader = new FileReader();
