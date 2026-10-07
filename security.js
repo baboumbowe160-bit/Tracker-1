@@ -12,6 +12,16 @@
       return crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: unb64(saltB64), iterations: 120000 }, key, 256);
     }).then(b64);
   }
+  /* Inside the Android app, the fingerprint prompt is shown by Android itself. */
+  var bioWait = {}, bioSeq = 0;
+  g.__bioDone = function (id, ok, msg) { var w = bioWait[id]; if (!w) return; delete bioWait[id]; if (ok) w.res(true); else w.rej(new Error(msg || 'Cancelled')); };
+  function nativeBio() {
+    var t = function (x) { return g.I18N && I18N.t ? I18N.t(x) : x; };
+    return new Promise(function (res, rej) {
+      var id = String(++bioSeq); bioWait[id] = { res: res, rej: rej };
+      g.AndroidBridge.bioAuth(id, t('Unlock Agent & Client Tracker'), t('Use PIN'));
+    });
+  }
   var LOCK_AFTER = { now: 0, '1': 60e3, '5': 300e3, '15': 900e3 };
 
   g.Security = {
@@ -39,12 +49,14 @@
     disable: function () { var c = sec(); delete c.pinHash; delete c.salt; delete c.bioId; c.fails = 0; c.lockUntil = 0; return host.saveLocal(); },
     lockDelayMs: function () { var v = sec().lockAfter || '1'; return v === 'never' ? Infinity : (LOCK_AFTER[v] != null ? LOCK_AFTER[v] : 0); },
     bioSupported: function () {
+      if (g.AndroidBridge) return Promise.resolve(!!g.AndroidBridge.bioAvailable());
       if (!g.PublicKeyCredential || !PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) return Promise.resolve(false);
       return PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(function () { return false; });
     },
     bioEnabled: function () { return !!sec().bioId; },
     enableBio: function () {
       var c = sec();
+      if (g.AndroidBridge) return nativeBio().then(function () { c.bioId = 'android'; return host.saveLocal(); });
       return navigator.credentials.create({ publicKey: {
         challenge: rand(32), rp: { name: 'Agent & Client Tracker', id: location.hostname },
         user: { id: rand(16), name: 'owner', displayName: 'Owner' },
@@ -54,6 +66,7 @@
     },
     unlockBio: function () {
       var c = sec(); if (!c.bioId) return Promise.reject(new Error('Fingerprint is not set up'));
+      if (g.AndroidBridge) return nativeBio();
       return navigator.credentials.get({ publicKey: {
         challenge: rand(32), rpId: location.hostname, timeout: 60000, userVerification: 'required',
         allowCredentials: [{ type: 'public-key', id: unb64(c.bioId), transports: ['internal'] }] } }).then(function (a) { if (!a) throw new Error('Cancelled'); return true; });

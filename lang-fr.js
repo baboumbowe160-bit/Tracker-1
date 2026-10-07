@@ -966,3 +966,4 @@ I18N.add('fr', {
   [/^(\d+) risk alerts$/, "$1 alertes de risque"],
   [/^(\d+) overdue$/, "$1 en retard"]
  ]);
+I18N.add('fr', { "entries today": "saisies aujourd'hui", "entry today": "saisie aujourd'hui", "Unlock Agent & Client Tracker": "Déverrouiller Agent & Client Tracker", "Use PIN": "Utiliser le code" });

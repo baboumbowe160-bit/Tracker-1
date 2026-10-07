@@ -966,3 +966,4 @@ I18N.add('pt', {
   [/^(\d+) risk alerts$/, "$1 alertas de risco"],
   [/^(\d+) overdue$/, "$1 em atraso"]
  ]);
+I18N.add('pt', { "entries today": "registos hoje", "entry today": "registo hoje", "Unlock Agent & Client Tracker": "Desbloquear Agent & Client Tracker", "Use PIN": "Usar o PIN" });

@@ -3,6 +3,8 @@
   'use strict';
   var C = window.Calc, num = C.num, r2 = C.r2;
   var APP_NAME = 'Agent & Client Tracker';
+  /* Set when running inside the self-contained Android app (no browser). */
+  var NATIVE = window.AndroidBridge || null;
 
   /* ================= Formatting ================= */
   var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -502,7 +504,7 @@
     return '<button class="qa ' + color + '" data-act="' + act + '"' + (v ? ' data-v="' + v + '"' : '') + '><span class="ic">' + icon(ic) + '</span><span>' + esc(label) + '</span></button>';
   }
   function isIOS() { return /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream; }
-  function isInstalled() { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; }
+  function isInstalled() { return !!NATIVE || (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; }
   function installCard() {
     if (isInstalled() || S.meta.installHidden) return '';
     if (deferredInstall) return '<div class="install"><img src="icon-192.png" alt="" width="44" height="44"><div class="tx"><b>Install the app</b><small>Opens like any app on your phone. Free and safe.</small></div>' +
@@ -2257,15 +2259,18 @@
     },
     shareShare: function () {
       var t = document.getElementById('msg').value;
-      if (navigator.share) navigator.share({ text: t }).catch(function () {});
+      if (NATIVE) NATIVE.shareText(t);
+      else if (navigator.share) navigator.share({ text: t }).catch(function () {});
       else ACT.shareCopy();
     },
     shareWa: function () {
       var t = document.getElementById('msg').value, p = sharePhone();
-      window.open('https://wa.me/' + p + '?text=' + encodeURIComponent(t), '_blank');
+      var wa = 'https://wa.me/' + p + '?text=' + encodeURIComponent(t);
+      if (NATIVE) NATIVE.openUrl(wa); else window.open(wa, '_blank');
     },
     backupShare: function () {
       var f = backupFile(), file = null;
+      if (NATIVE) { var rd = new FileReader(); rd.onload = function () { NATIVE.shareFile(f.name, 'application/json', String(rd.result).split(',')[1] || ''); markBackedUp(); }; rd.readAsDataURL(f.blob); return; }
       try { file = new File([f.blob], f.name, { type: 'application/json' }); } catch (e) { file = null; }
       if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
         navigator.share({ files: [file], title: APP_NAME + ' backup' }).then(markBackedUp).catch(function () {});
@@ -2304,7 +2309,7 @@
       Sync.signOut().then(function () { UI.stack = [{ v: 'home' }]; render(); });
     },
     skipAccount: function () { S.meta.skipAccount = true; persist(); render(); },
-    openPrivacy: function () { window.open('privacy.html', '_blank'); },
+    openPrivacy: function () { if (NATIVE) location.href = 'privacy.html'; else window.open('privacy.html', '_blank'); },
     deleteAccount: function () {
       openSheet('Delete account',
         '<div class="form-error">This permanently deletes your account and all your records, online and on this phone. It cannot be undone.</div>' +
@@ -2345,6 +2350,11 @@
   }
   function markBackedUp() { S.meta.lastBackup = R.today; persist(); render(); toast('Backup saved'); }
   function download(blob, name) {
+    if (NATIVE) {
+      var rd = new FileReader();
+      rd.onload = function () { NATIVE.saveFile(name, blob.type || 'application/octet-stream', String(rd.result).split(',')[1] || ''); };
+      rd.readAsDataURL(blob); return;
+    }
     var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
     document.body.appendChild(a); a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
@@ -2495,15 +2505,20 @@
     document.body.appendChild(cover);
   }
   function hideCover() { if (cover) { cover.remove(); cover = null; } }
-  document.addEventListener('visibilitychange', function () {
-    if (document.hidden) { UI.hiddenAt = Date.now(); markAlive(); showCover(); return; }
+  var appHidden = false;
+  function appHide() { if (appHidden) return; appHidden = true; UI.hiddenAt = Date.now(); markAlive(); showCover(); }
+  function appShow() {
+    if (!appHidden) return; appHidden = false;
     hideCover();
     if (Security.enabled() && !UI.locked && UI.hiddenAt) {
       var delay = Security.lockDelayMs();
       if (delay !== Infinity && Date.now() - UI.hiddenAt >= delay) { try { sessionStorage.removeItem('act-alive'); } catch (e) {} UI.locked = true; UI.pin = ''; UI.pinMsg = ''; UI.bioTried = false; render(); return; }
     }
     if (!UI.sheetOpen) { recompute(); render(); }
-  });
+  }
+  document.addEventListener('visibilitychange', function () { if (document.hidden) appHide(); else appShow(); });
+  /* The Android app calls these when it goes to the background and comes back. */
+  window.__appHidden = appHide; window.__appShown = appShow;
   window.addEventListener('pagehide', function () { markAlive(); showCover(); });
   window.addEventListener('pageshow', function () { if (!document.hidden) hideCover(); });
 
@@ -2546,7 +2561,7 @@
     if (migrate()) persist();
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
   });
-  if ('serviceWorker' in navigator) {
+  if (!NATIVE && 'serviceWorker' in navigator) {
     var hadController = !!navigator.serviceWorker.controller, reloading = false;
     navigator.serviceWorker.addEventListener('controllerchange', function () {
       if (hadController && !reloading && !UI.sheetOpen) { reloading = true; location.reload(); }
