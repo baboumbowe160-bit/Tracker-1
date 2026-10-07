@@ -1797,6 +1797,7 @@
   function refreshForm() {
     if (!FORM) return;
     var vals = collect(), el = document.getElementById('sheetwrap');
+    enhancePickers(el); enhanceQuick(el);
     FORM.schema.fields.forEach(function (f) {
       var box = el.querySelector('[data-field="' + f.k + '"]'); if (!box) return;
       if (f.show) box.classList.toggle('hide', !f.show(vals));
@@ -1818,7 +1819,7 @@
     document.body.appendChild(el);
     UI.sheetOpen = true; document.body.style.overflow = 'hidden';
     history.pushState({ sheet: 1 }, '');
-    setTimeout(function () { enhancePickers(el); }, 0);
+    setTimeout(function () { enhancePickers(el); enhanceQuick(el); }, 0);
   }
   function removeSheet() {
     var el = document.getElementById('sheetwrap'); if (el) el.remove();
@@ -2309,7 +2310,7 @@
     },
     batchAdd: function () {
       var box = document.getElementById('batch-rows'), n = box.querySelectorAll('.batch-row').length;
-      box.insertAdjacentHTML('beforeend', batchRowHTML(n)); enhancePickers(box);
+      box.insertAdjacentHTML('beforeend', batchRowHTML(n)); enhancePickers(box); enhanceQuick(box);
       var last = box.lastElementChild; last.scrollIntoView({ block: 'start' }); var first = last.querySelector('.b-phone, .b-agent'); if (first) first.focus();
     },
     batchRemove: function (d, el) { el.closest('.batch-row').remove(); renumberBatch(); },
@@ -2666,6 +2667,77 @@
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && e.target.hasAttribute && e.target.hasAttribute('data-suggest')) hideSuggest(e.target);
   });
+
+
+  /* Recent people as small buttons above a name box, plus a button that opens the full list.
+     Nothing pops up by itself, so typing a new name is never in the way. */
+  var QUICK_WORD = { cust: ['All customers', 'Customers'], agent: ['All agents', 'Agents'], ref: ['All agents', 'Referral Agents'] };
+  function recentPool(kind) {
+    var pool = suggestPool(kind).map(function (x) { return x; });
+    if (kind === 'cust') {
+      var info = {}; R.customers.forEach(function (c) { info[(c.name || '') + '|' + (c.phone || '')] = c; });
+      pool.forEach(function (x) { var c = info[x.name + '|' + x.phone]; x.last = c ? c.last : ''; x.n = c ? c.txns : 0; x.owed = c ? c.owed : 0; });
+    } else if (kind === 'agent') {
+      var ag = {}; R.agents.balances.forEach(function (a) { ag[a.name] = a; });
+      pool.forEach(function (x) { var a = ag[x.name]; x.last = a ? a.last : ''; x.n = a ? a.entries : 0; x.net = a ? a.net : 0; });
+    }
+    return pool.sort(function (a, b) { return String(b.last || '').localeCompare(String(a.last || '')) || (b.n || 0) - (a.n || 0); });
+  }
+  function initials(name) {
+    var w = String(name || '').replace(/[^A-Za-zÀ-ɏ0-9 ]/g, ' ').trim().split(/\s+/).filter(Boolean);
+    return ((w[0] || '?')[0] + (w.length > 1 ? w[w.length - 1][0] : '')).toUpperCase();
+  }
+  function enhanceQuick(root) {
+    var list = (root || document).querySelectorAll('input[data-suggest]:not([type=tel]):not(.qp)');
+    for (var i = 0; i < list.length; i++) (function (inp) {
+      inp.classList.add('qp');
+      var kind = inp.getAttribute('data-suggest'), pool = recentPool(kind); if (!pool.length) return;
+      var row = document.createElement('div'); row.className = 'quickpick';
+      row.innerHTML = '<button type="button" class="qchip all">' + icon('list') + '<span>' + esc(QUICK_WORD[kind][0]) + '</span><span class="qn">' + pool.length + '</span></button>' +
+        pool.slice(0, 5).map(function (x, j) {
+          return '<button type="button" class="qchip" data-j="' + j + '"><span class="av">' + esc(initials(x.name)) + '</span><span>' + esc(x.name.split(' ')[0] || x.name) + '</span></button>';
+        }).join('');
+      inp.parentNode.insertBefore(row, inp);
+      row.addEventListener('click', function (e) {
+        var b = e.target.closest('.qchip'); if (!b) return;
+        if (b.classList.contains('all')) { openPeople(inp, kind); return; }
+        pickSuggestion(inp, pool[Number(b.getAttribute('data-j'))]);
+      });
+    })(list[i]);
+  }
+  function openPeople(inp, kind) {
+    closePicker();
+    var pool = recentPool(kind), title = QUICK_WORD[kind][1];
+    function rowHTML(x, i) {
+      var extra = x.owed > 0 ? '<em class="c-owed">' + esc(money(x.owed)) + '</em>' : '';
+      return '<button type="button" class="prow" data-i="' + i + '" data-name="' + esc((x.name + ' ' + String(x.phone || '').replace(/\D/g, '')).toLowerCase()) + '">' +
+        '<span class="av">' + esc(initials(x.name)) + '</span><span class="tx"><b>' + esc(x.name || 'No name') + '</b>' +
+        (x.phone ? '<small>' + esc(phoneLine(x.phone)) + '</small>' : '') + '</span>' + extra + '</button>';
+    }
+    var el = document.createElement('div'); el.id = 'pickerwrap';
+    el.innerHTML = '<div class="picker-back"></div><div class="picker" role="dialog" aria-modal="true" aria-label="' + esc(title) + '">' +
+      '<header><h2><span>' + esc(title) + '</span> <span class="qn">' + pool.length + '</span></h2><button type="button" class="pclose">Close</button></header>' +
+      '<div class="psearch"><input type="search" placeholder="Search name or number" aria-label="Search name or number" autocomplete="off"></div>' +
+      '<div class="pbody plist">' + pool.map(rowHTML).join('') + '<p class="hint pnone hide" style="text-align:center;margin:18px 0">No match. Close this and type the new name.</p></div></div>';
+    document.body.appendChild(el);
+    PICKER = { el: el, sel: null };
+    history.pushState({ picker: 1 }, '');
+    el.querySelector('.picker-back').addEventListener('click', function () { history.back(); });
+    el.querySelector('.pclose').addEventListener('click', function () { history.back(); });
+    el.querySelector('.pbody').addEventListener('click', function (e) {
+      var t = e.target.closest('.prow'); if (!t) return;
+      pickSuggestion(inp, pool[Number(t.getAttribute('data-i'))]); history.back();
+    });
+    var q = el.querySelector('.psearch input');
+    q.addEventListener('input', function () {
+      var v = q.value.trim().toLowerCase(), d = v.replace(/\D/g, ''), shown = 0;
+      Array.prototype.forEach.call(el.querySelectorAll('.prow'), function (t) {
+        var hay = t.getAttribute('data-name'), ok = !v || hay.indexOf(v) >= 0 || (d.length >= 3 && hay.indexOf(d) >= 0);
+        t.classList.toggle('hide', !ok); if (ok) shown++;
+      });
+      el.querySelector('.pnone').classList.toggle('hide', shown > 0);
+    });
+  }
 
   function importFile(file) {
     if (!file) return;

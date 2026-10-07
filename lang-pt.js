@@ -970,3 +970,4 @@ I18N.add('pt', { "entries today": "registos hoje", "entry today": "registo hoje"
 I18N.add('pt', { "Mobile Money": "Dinheiro móvel", "Banks": "Bancos", "Microfinance": "Microfinanças", "Other Ways": "Outras formas", "Your Own": "Os seus", "Search": "Pesquisar", "Which Bank?": "Qual banco?", "Which Microfinance?": "Qual microfinança?", "Banks and Microfinance": "Bancos e microfinanças" });
 I18N.add('pt', { "Backup": "Cópia de segurança", "Help": "Ajuda" });
 I18N.add('pt', { "Already saved": "Já guardados" });
+I18N.add('pt', { "All customers": "Todos os clientes", "All agents": "Todos os agentes", "Search name or number": "Pesquisar nome ou número", "No match. Close this and type the new name.": "Sem resultados. Feche e escreva o novo nome." });
