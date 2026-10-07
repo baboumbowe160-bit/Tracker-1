@@ -483,12 +483,29 @@ jobs:
           KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           set -e
-          printf '%s' "$KS_B64" | tr -d ' \r\n' | base64 -d > "$RUNNER_TEMP/release.jks"
+          report() {  # show the important lines of a log as an error note on the run page
+            msg=$(grep -E "$2" "$1" | grep -v '^\s*at ' | tail -n 40 | cut -c1-220 | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}' | head -c 3800)
+            echo "::error title=$3::$msg"
+          }
+          if ! printf '%s' "$KS_B64" | tr -d ' \r\n\t' | base64 -d > "$RUNNER_TEMP/release.jks" 2> "$RUNNER_TEMP/b64.log"; then
+            echo "::error title=Signing key::ANDROID_KEYSTORE_BASE64 is not complete or has extra characters. Copy it again in full."
+            exit 1
+          fi
+          if ! keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$KS_PASS" -alias tracker > "$RUNNER_TEMP/kt.log" 2>&1; then
+            report "$RUNNER_TEMP/kt.log" "." "Signing key"
+            echo "::error title=Signing key::The key file or ANDROID_KEYSTORE_PASSWORD does not match. Copy both secrets again."
+            exit 1
+          fi
           export KS_FILE="$RUNNER_TEMP/release.jks"
           export VERSION_CODE=$((100 + GITHUB_RUN_NUMBER))
           export VERSION_NAME="1.${GITHUB_RUN_NUMBER}"
           cd android
-          gradle --no-daemon --stacktrace assembleRelease
+          if ! gradle --no-daemon --stacktrace assembleRelease > "$RUNNER_TEMP/gradle.log" 2>&1; then
+            cat "$RUNNER_TEMP/gradle.log"
+            report "$RUNNER_TEMP/gradle.log" "error|Error|What went wrong|FAILURE|Could not|> |Caused by|failed" "Build failed"
+            exit 1
+          fi
+          tail -n 20 "$RUNNER_TEMP/gradle.log"
           cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/agent-client-tracker-app.apk"
           rm -f "$RUNNER_TEMP/release.jks"
 
