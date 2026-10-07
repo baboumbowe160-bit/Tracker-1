@@ -1,0 +1,508 @@
+# Builds the self-contained Android app (all app files inside the APK, no website needed).
+# Runs by itself every time you upload files to this repository, or by hand from the Actions tab.
+# Needs two repository secrets: ANDROID_KEYSTORE_BASE64 and ANDROID_KEYSTORE_PASSWORD.
+name: Build Android app
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-app
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the app files
+        uses: actions/checkout@v4
+        with:
+          path: web
+
+      - name: Check the signing key is set up
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KS_B64" ] || [ -z "$KS_PASS" ]; then
+            echo "::error::The signing key is missing. Add ANDROID_KEYSTORE_BASE64 and ANDROID_KEYSTORE_PASSWORD under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Write the Android project
+        run: |
+          set -e
+          A=android/app/src/main
+          mkdir -p $A/java/com/baboumbowe/agentclienttracker/app $A/res/values $A/res/xml \
+                   $A/res/mipmap-xxxhdpi $A/res/mipmap-anydpi-v26 $A/res/drawable-nodpi $A/assets/www
+
+          cat > android/settings.gradle <<'EOF'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement {
+            repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+            repositories { google(); mavenCentral() }
+          }
+          rootProject.name = 'AgentClientTracker'
+          include ':app'
+          EOF
+
+          cat > android/build.gradle <<'EOF'
+          plugins { id 'com.android.application' version '8.5.2' apply false }
+          EOF
+
+          cat > android/gradle.properties <<'EOF'
+          android.useAndroidX=true
+          org.gradle.jvmargs=-Xmx2g -Dfile.encoding=UTF-8
+          EOF
+
+          cat > android/app/build.gradle <<'EOF'
+          plugins { id 'com.android.application' }
+          android {
+            namespace 'com.baboumbowe.agentclienttracker.app'
+            compileSdk 34
+            defaultConfig {
+              applicationId 'com.baboumbowe.agentclienttracker.app'
+              minSdk 24
+              targetSdk 34
+              versionCode Integer.parseInt(System.getenv('VERSION_CODE') ?: '1')
+              versionName System.getenv('VERSION_NAME') ?: '1.0'
+            }
+            signingConfigs {
+              release {
+                storeFile file(System.getenv('KS_FILE'))
+                storePassword System.getenv('KS_PASS')
+                keyAlias 'tracker'
+                keyPassword System.getenv('KS_PASS')
+              }
+            }
+            buildTypes {
+              release {
+                minifyEnabled false
+                signingConfig signingConfigs.release
+              }
+            }
+            lint {
+              checkReleaseBuilds false
+              abortOnError false
+            }
+            compileOptions {
+              sourceCompatibility JavaVersion.VERSION_17
+              targetCompatibility JavaVersion.VERSION_17
+            }
+          }
+          dependencies {
+            implementation 'androidx.appcompat:appcompat:1.7.0'
+            implementation 'androidx.webkit:webkit:1.11.0'
+            implementation 'androidx.biometric:biometric:1.1.0'
+          }
+          EOF
+
+          cat > $A/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+            <uses-permission android:name="android.permission.INTERNET" />
+            <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+            <application
+              android:label="@string/app_name"
+              android:icon="@mipmap/ic_launcher"
+              android:roundIcon="@mipmap/ic_launcher"
+              android:theme="@style/AppTheme"
+              android:allowBackup="true"
+              android:supportsRtl="true">
+              <activity
+                android:name=".MainActivity"
+                android:exported="true"
+                android:launchMode="singleTask"
+                android:screenOrientation="portrait"
+                android:windowSoftInputMode="adjustResize"
+                android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode">
+                <intent-filter>
+                  <action android:name="android.intent.action.MAIN" />
+                  <category android:name="android.intent.category.LAUNCHER" />
+                </intent-filter>
+              </activity>
+              <provider
+                android:name="androidx.core.content.FileProvider"
+                android:authorities="${applicationId}.files"
+                android:exported="false"
+                android:grantUriPermissions="true">
+                <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
+              </provider>
+            </application>
+          </manifest>
+          EOF
+
+          cat > $A/res/values/strings.xml <<'EOF'
+          <resources><string name="app_name">Agent &amp; Client Tracker</string></resources>
+          EOF
+
+          cat > $A/res/values/colors.xml <<'EOF'
+          <resources>
+            <color name="paper">#F5F6F8</color>
+            <color name="white">#FFFFFF</color>
+            <color name="icon_bg">#2453D6</color>
+          </resources>
+          EOF
+
+          cat > $A/res/values/styles.xml <<'EOF'
+          <resources>
+            <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+              <item name="android:windowBackground">@color/paper</item>
+              <item name="android:statusBarColor">@color/white</item>
+              <item name="android:windowLightStatusBar">true</item>
+            </style>
+          </resources>
+          EOF
+
+          cat > $A/res/xml/file_paths.xml <<'EOF'
+          <paths><cache-path name="shared" path="shared/" /></paths>
+          EOF
+
+          cat > $A/res/mipmap-anydpi-v26/ic_launcher.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+            <background android:drawable="@color/icon_bg" />
+            <foreground android:drawable="@drawable/ic_fg" />
+          </adaptive-icon>
+          EOF
+
+          cat > $A/java/com/baboumbowe/agentclienttracker/app/MainActivity.java <<'EOF'
+          package com.baboumbowe.agentclienttracker.app;
+
+          import android.annotation.SuppressLint;
+          import android.content.ActivityNotFoundException;
+          import android.content.ClipData;
+          import android.content.Intent;
+          import android.net.Uri;
+          import android.os.Bundle;
+          import android.util.Base64;
+          import android.webkit.JavascriptInterface;
+          import android.webkit.ValueCallback;
+          import android.webkit.WebChromeClient;
+          import android.webkit.WebResourceRequest;
+          import android.webkit.WebResourceResponse;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import android.widget.Toast;
+
+          import androidx.activity.OnBackPressedCallback;
+          import androidx.annotation.NonNull;
+          import androidx.appcompat.app.AppCompatActivity;
+          import androidx.biometric.BiometricManager;
+          import androidx.biometric.BiometricPrompt;
+          import androidx.core.content.ContextCompat;
+          import androidx.core.content.FileProvider;
+          import androidx.webkit.WebViewAssetLoader;
+
+          import org.json.JSONObject;
+
+          import java.io.File;
+          import java.io.FileOutputStream;
+          import java.io.OutputStream;
+
+          /* The whole app lives inside this APK (assets/www). It is shown in a WebView and never loads a website. */
+          public class MainActivity extends AppCompatActivity {
+            private static final String HOST = "appassets.androidplatform.net";
+            private static final String START = "https://" + HOST + "/assets/www/index.html";
+            private static final int REQ_FILE = 11, REQ_SAVE = 12;
+            private static final int BIO = BiometricManager.Authenticators.BIOMETRIC_WEAK;
+
+            private WebView web;
+            private ValueCallback<Uri[]> fileCallback;
+            private byte[] pendingSave;
+
+            @SuppressLint("SetJavaScriptEnabled")
+            @Override
+            protected void onCreate(Bundle state) {
+              super.onCreate(state);
+              web = new WebView(this);
+              setContentView(web);
+
+              final WebViewAssetLoader loader = new WebViewAssetLoader.Builder()
+                  .setDomain(HOST)
+                  .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
+                  .build();
+
+              WebSettings s = web.getSettings();
+              s.setJavaScriptEnabled(true);
+              s.setDomStorageEnabled(true);
+              s.setDatabaseEnabled(true);
+              s.setAllowFileAccess(false);
+              s.setAllowContentAccess(false);
+              s.setTextZoom(100);
+
+              web.addJavascriptInterface(new Bridge(), "AndroidBridge");
+
+              web.setWebViewClient(new WebViewClient() {
+                @Override
+                public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                  return loader.shouldInterceptRequest(request.getUrl());
+                }
+                @Override
+                public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                  Uri u = request.getUrl();
+                  if (HOST.equals(u.getHost())) return false;
+                  openExternal(u);
+                  return true;
+                }
+              });
+
+              web.setWebChromeClient(new WebChromeClient() {
+                @Override
+                public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                  if (fileCallback != null) fileCallback.onReceiveValue(null);
+                  fileCallback = callback;
+                  Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+                  i.addCategory(Intent.CATEGORY_OPENABLE);
+                  i.setType("*/*");
+                  try {
+                    startActivityForResult(Intent.createChooser(i, null), REQ_FILE);
+                  } catch (ActivityNotFoundException e) {
+                    fileCallback = null;
+                    return false;
+                  }
+                  return true;
+                }
+              });
+
+              getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+                @Override
+                public void handleOnBackPressed() {
+                  if (web.canGoBack()) {
+                    web.goBack();
+                  } else {
+                    setEnabled(false);
+                    getOnBackPressedDispatcher().onBackPressed();
+                    setEnabled(true);
+                  }
+                }
+              });
+
+              web.loadUrl(START);
+            }
+
+            @Override
+            protected void onStart() {
+              super.onStart();
+              js("window.__appShown && window.__appShown()");
+            }
+
+            @Override
+            protected void onStop() {
+              js("window.__appHidden && window.__appHidden()");
+              super.onStop();
+            }
+
+            @Override
+            protected void onDestroy() {
+              if (web != null) web.destroy();
+              super.onDestroy();
+            }
+
+            @Override
+            protected void onActivityResult(int request, int result, Intent data) {
+              super.onActivityResult(request, result, data);
+              if (request == REQ_FILE) {
+                if (fileCallback != null) {
+                  Uri[] picked = null;
+                  if (result == RESULT_OK && data != null && data.getData() != null) picked = new Uri[] { data.getData() };
+                  fileCallback.onReceiveValue(picked);
+                  fileCallback = null;
+                }
+              } else if (request == REQ_SAVE) {
+                boolean ok = false;
+                if (result == RESULT_OK && data != null && data.getData() != null && pendingSave != null) {
+                  try (OutputStream out = getContentResolver().openOutputStream(data.getData())) {
+                    out.write(pendingSave);
+                    ok = true;
+                  } catch (Exception e) {
+                    ok = false;
+                  }
+                }
+                pendingSave = null;
+                if (result == RESULT_OK) toast(ok ? "Saved" : "Could not save the file");
+              }
+            }
+
+            private void js(String code) {
+              if (web != null) web.evaluateJavascript(code, null);
+            }
+
+            private void toast(String msg) {
+              Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+            }
+
+            private void openExternal(Uri u) {
+              try {
+                Intent i = new Intent(Intent.ACTION_VIEW, u);
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(i);
+              } catch (ActivityNotFoundException e) {
+                toast("No app on this phone can open this link");
+              }
+            }
+
+            private void showBio(final String id, String title, String cancel) {
+              BiometricPrompt prompt = new BiometricPrompt(this, ContextCompat.getMainExecutor(this),
+                  new BiometricPrompt.AuthenticationCallback() {
+                    @Override
+                    public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult r) {
+                      bioDone(id, true, "");
+                    }
+                    @Override
+                    public void onAuthenticationError(int code, @NonNull CharSequence msg) {
+                      bioDone(id, false, String.valueOf(msg));
+                    }
+                  });
+              BiometricPrompt.PromptInfo info = new BiometricPrompt.PromptInfo.Builder()
+                  .setTitle(title == null || title.isEmpty() ? "Unlock" : title)
+                  .setNegativeButtonText(cancel == null || cancel.isEmpty() ? "Use PIN" : cancel)
+                  .setAllowedAuthenticators(BIO)
+                  .build();
+              try {
+                prompt.authenticate(info);
+              } catch (Exception e) {
+                bioDone(id, false, "Fingerprint is not available");
+              }
+            }
+
+            private void bioDone(String id, boolean ok, String msg) {
+              js("window.__bioDone && window.__bioDone(" + JSONObject.quote(id) + "," + ok + "," + JSONObject.quote(msg) + ")");
+            }
+
+            /* Called from the app's JavaScript as window.AndroidBridge.* */
+            private class Bridge {
+              @JavascriptInterface
+              public boolean bioAvailable() {
+                return BiometricManager.from(MainActivity.this).canAuthenticate(BIO) == BiometricManager.BIOMETRIC_SUCCESS;
+              }
+
+              @JavascriptInterface
+              public void bioAuth(final String id, final String title, final String cancel) {
+                runOnUiThread(() -> showBio(id, title, cancel));
+              }
+
+              @JavascriptInterface
+              public void saveFile(final String name, final String mime, final String base64) {
+                runOnUiThread(() -> {
+                  try {
+                    pendingSave = Base64.decode(base64, Base64.DEFAULT);
+                  } catch (Exception e) {
+                    pendingSave = null;
+                    toast("Could not save the file");
+                    return;
+                  }
+                  Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                  i.addCategory(Intent.CATEGORY_OPENABLE);
+                  i.setType(mime == null || mime.isEmpty() ? "application/octet-stream" : mime);
+                  i.putExtra(Intent.EXTRA_TITLE, name);
+                  try {
+                    startActivityForResult(i, REQ_SAVE);
+                  } catch (ActivityNotFoundException e) {
+                    pendingSave = null;
+                    toast("Could not save the file");
+                  }
+                });
+              }
+
+              @JavascriptInterface
+              public void shareFile(final String name, final String mime, final String base64) {
+                runOnUiThread(() -> {
+                  try {
+                    File dir = new File(getCacheDir(), "shared");
+                    if (!dir.exists()) dir.mkdirs();
+                    File f = new File(dir, name.replaceAll("[^A-Za-z0-9._-]", "_"));
+                    try (FileOutputStream out = new FileOutputStream(f)) {
+                      out.write(Base64.decode(base64, Base64.DEFAULT));
+                    }
+                    Uri u = FileProvider.getUriForFile(MainActivity.this, getPackageName() + ".files", f);
+                    Intent i = new Intent(Intent.ACTION_SEND);
+                    i.setType(mime == null || mime.isEmpty() ? "application/octet-stream" : mime);
+                    i.putExtra(Intent.EXTRA_STREAM, u);
+                    i.setClipData(ClipData.newRawUri("", u));
+                    i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    startActivity(Intent.createChooser(i, name));
+                  } catch (Exception e) {
+                    toast("Could not share the file");
+                  }
+                });
+              }
+
+              @JavascriptInterface
+              public void shareText(final String text) {
+                runOnUiThread(() -> {
+                  Intent i = new Intent(Intent.ACTION_SEND);
+                  i.setType("text/plain");
+                  i.putExtra(Intent.EXTRA_TEXT, text);
+                  try {
+                    startActivity(Intent.createChooser(i, null));
+                  } catch (Exception e) {
+                    toast("No app on this phone can share this");
+                  }
+                });
+              }
+
+              @JavascriptInterface
+              public void openUrl(final String url) {
+                runOnUiThread(() -> openExternal(Uri.parse(url)));
+              }
+            }
+          }
+          EOF
+
+      - name: Copy the app files and icon into the project
+        run: |
+          set -e
+          shopt -s nullglob
+          A=android/app/src/main
+          for f in web/*.html web/*.js web/*.css web/*.png web/*.webmanifest; do cp "$f" $A/assets/www/; done
+          rm -f $A/assets/www/sw.js
+          test -f $A/assets/www/index.html || { echo "::error::index.html was not found in the repository"; exit 1; }
+          cp web/icon-192.png $A/res/mipmap-xxxhdpi/ic_launcher.png
+          cp web/icon-maskable-512.png $A/res/drawable-nodpi/ic_fg.png
+          ls -la $A/assets/www
+
+      - name: Build and sign the APK
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -e
+          printf '%s' "$KS_B64" | tr -d ' \r\n' | base64 -d > "$RUNNER_TEMP/release.jks"
+          export KS_FILE="$RUNNER_TEMP/release.jks"
+          export VERSION_CODE=$((100 + GITHUB_RUN_NUMBER))
+          export VERSION_NAME="1.${GITHUB_RUN_NUMBER}"
+          cd android
+          gradle --no-daemon --stacktrace assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/agent-client-tracker-app.apk"
+          rm -f "$RUNNER_TEMP/release.jks"
+
+      - name: Keep a copy of the APK on this run
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-client-tracker-app
+          path: agent-client-tracker-app.apk
+
+      - name: Publish the APK as a download
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: app-v${{ github.run_number }}
+          name: Android app ${{ github.run_number }}
+          body: Self-contained Android app. Download agent-client-tracker-app.apk below and open it on your phone.
+          files: agent-client-tracker-app.apk
+          make_latest: true
