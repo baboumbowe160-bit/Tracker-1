@@ -133,6 +133,9 @@
     if (n.__i18n !== undefined && n.nodeValue === n.__i18n) return;
     if (skip(n.parentElement)) return;
     var v = n.nodeValue; if (!/[A-Za-z]/.test(v)) return;
+    // A choice in a list keeps its English value, so records are saved the same in every language. Only the words shown change.
+    var pe = n.parentElement;
+    if (pe && pe.tagName === 'OPTION' && !pe.hasAttribute('value')) pe.setAttribute('value', v.replace(/\s+/g, ' ').trim());
     var t = I.t(v); n.__i18n = t; if (t !== v) n.nodeValue = t;
   }
   function doEl(el) {

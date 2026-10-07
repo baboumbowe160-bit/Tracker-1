@@ -42,7 +42,9 @@
     theme: 'classic',
     tipMode: 'extra',
     payDefault: '',
-    channels: ['Wave', 'APS', 'Afrimoney', 'QMoney', 'Nafa', 'Yonna', 'ComCach', 'Bank Transfer', 'Cash'],
+    channels: ['Wave', 'APS', 'Afrimoney', 'QMoney', 'Nafa', 'Yonna', 'ComCach', 'Bank Transfer', 'Microfinance', 'Cash'],
+    banks: ['Access Bank', 'Agib Bank', 'BSIC', 'Bloom Bank', 'Ecobank', 'First Bank', 'GTBank', 'Mega Bank', 'Trust Bank', 'Vista Bank', 'Zenith Bank',
+      'APS Islamic Microfinance', 'Bayba Financial Services', 'Kolomoni Microfinance', 'NACCUG Credit Union', 'Reliance Financial Services', 'Salam Financial Services', 'Yonna Islamic Microfinance', 'VISACA (Village Bank)'],
     exTypes: ['Bank-to-Wallet', 'Wallet-to-Bank', 'Deposit', 'Other'],
     agentTxTypes: ['Float Transfer/Rebalancing (between wallets)', 'EVC/Voucher Transaction', 'Bank to Bank Exchange', 'Bank to Wallet Exchange', 'Wallet to Bank Exchange', 'Other'],
     wallets: ['Wave', 'APS', 'Afrimoney', 'QMoney', 'Nafa', 'ComCach', 'Yonna Wallet', 'Xpress Point', 'Suturamoney', 'Other'],
@@ -104,6 +106,12 @@
       var before = S.capital.length;
       S.capital = S.capital.filter(function (s) { return !C.snapEmpty(s) || (s.notes && String(s.notes).trim()); });
       m.v3 = true; if (S.capital.length !== before) changed = true;
+    }
+    if (!m.v13) {
+      // Microfinance became a way to be paid. Add it once, before Cash.
+      var ch = S.settings.channels || [];
+      if (ch.indexOf('Microfinance') < 0) { var at = ch.indexOf('Cash'); ch.splice(at < 0 ? ch.length : at, 0, 'Microfinance'); S.settings.channels = ch; }
+      m.v13 = true; changed = true;
     }
     if (C.assignRefIds(S)) changed = true;
     return changed;
@@ -169,6 +177,7 @@
   function go(v) { UI.stack.push(v); history.pushState({ n: UI.stack.length }, ''); render(); window.scrollTo(0, 0); }
   function setTab(t) { UI.stack = [{ v: t }]; UI.limit = 120; render(); window.scrollTo(0, 0); }
   window.addEventListener('popstate', function () {
+    if (closePicker()) return;
     if (UI.sheetOpen) { removeSheet(); return; }
     if (UI.stack.length > 1) { UI.stack.pop(); render(); }
   });
@@ -209,9 +218,123 @@
     list: '<path d="M8.5 6.5H20M8.5 12H20M8.5 17.5H20"/><path d="M4.2 6.5h.01M4.2 12h.01M4.2 17.5h.01"/>',
     risk: '<path class="f" d="M3.5 17a8.5 8.5 0 0117 0z"/><path d="M3.5 17a8.5 8.5 0 0117 0"/><path d="M12 17l3.8-5"/><circle cx="12" cy="17" r="1.3"/>',
     bell: '<path class="f" d="M6 17V11a6 6 0 0112 0v6z"/><path d="M6 17V11a6 6 0 0112 0v6l1.5 1.5h-15z"/><path d="M10 21h4"/>',
-    check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>'
+    check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    bank: '<path class="f" d="M3.5 9.5L12 4l8.5 5.5z"/><path d="M3.5 9.5L12 4l8.5 5.5z"/><path d="M5.5 10v7M10 10v7M14 10v7M18.5 10v7M3.5 20h17"/>',
+    mfi: '<circle class="f" cx="9" cy="8" r="3"/><circle cx="9" cy="8" r="3"/><path d="M3.5 19c.6-3.2 2.7-4.8 5.5-4.8 1.2 0 2.3.3 3.2.9"/><circle class="f" cx="17" cy="15.5" r="4"/><circle cx="17" cy="15.5" r="4"/><path d="M17 13.6v3.8M15.4 15.5h3.2"/>'
   };
-  function icon(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[n] || '') + '</svg>'; }
+  function icon(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[n] || '') + '</svg>'; }
+
+  /* ================= Payment providers: groups, badges and the picker ================= */
+  var PICK_LISTS = { channels: 1, banks: 1, wallets: 1 };
+  var PROV_GROUPS = [
+    ['wallet', 'Mobile Money', ['Wave', 'APS', 'Afrimoney', 'QMoney', 'Nafa', 'Yonna', 'Yonna Wallet', 'ComCach', 'Xpress Point', 'Suturamoney']],
+    ['bank', 'Banks', ['Access Bank', 'Agib Bank', 'BSIC', 'Bloom Bank', 'Ecobank', 'First Bank', 'GTBank', 'Mega Bank', 'Trust Bank', 'Vista Bank', 'Zenith Bank']],
+    ['mfi', 'Microfinance', ['APS Islamic Microfinance', 'Bayba Financial Services', 'Kolomoni Microfinance', 'NACCUG Credit Union', 'Reliance Financial Services', 'Salam Financial Services', 'Yonna Islamic Microfinance', 'VISACA (Village Bank)']],
+    ['way', 'Other Ways', ['Bank Transfer', 'Microfinance', 'Cash', 'Cash in Hand']]
+  ];
+  var PROV_CODE = { 'Wave': 'WV', 'APS': 'APS', 'Afrimoney': 'AM', 'QMoney': 'QM', 'Nafa': 'NF', 'Yonna': 'YN', 'Yonna Wallet': 'YN', 'ComCach': 'CC',
+    'Xpress Point': 'XP', 'Suturamoney': 'SM', 'Access Bank': 'AB', 'Agib Bank': 'AG', 'BSIC': 'BS', 'Bloom Bank': 'BB', 'Ecobank': 'EB', 'First Bank': 'FB',
+    'GTBank': 'GT', 'Mega Bank': 'MB', 'Trust Bank': 'TB', 'Vista Bank': 'VB', 'Zenith Bank': 'ZB', 'APS Islamic Microfinance': 'APS', 'Bayba Financial Services': 'BF',
+    'Kolomoni Microfinance': 'KM', 'NACCUG Credit Union': 'NC', 'Reliance Financial Services': 'RF', 'Salam Financial Services': 'SF',
+    'Yonna Islamic Microfinance': 'YM', 'VISACA (Village Bank)': 'VS' };
+  var PROV_ICON = { 'Bank Transfer': 'bank', 'Microfinance': 'mfi', 'Cash': 'cash', 'Cash in Hand': 'cash' };
+  var provIndex = null;
+  function provGroup(name) {
+    if (!provIndex) { provIndex = {}; PROV_GROUPS.forEach(function (g) { g[2].forEach(function (n) { provIndex[n.toLowerCase()] = g[0]; }); }); }
+    var k = String(name || '').toLowerCase();
+    if (provIndex[k]) return provIndex[k];
+    if (/bank/.test(k)) return 'bank';
+    if (/microfinance|credit union|financial services|visaca/.test(k)) return 'mfi';
+    return 'own';
+  }
+  function provCode(name) {
+    if (PROV_CODE[name]) return PROV_CODE[name];
+    var w = String(name || '').replace(/[^A-Za-z0-9 ]/g, ' ').trim().split(/\s+/).filter(Boolean);
+    return ((w[0] || '?')[0] + (w.length > 1 ? w[1][0] : (w[0] || '').charAt(1))).toUpperCase();
+  }
+  /* A round badge for a payment provider. It shows the provider's short code in the colour of its group, not a company logo. */
+  function provBadge(name, size) {
+    var cls = 'pbadge g-' + (name === '__other' ? 'own' : provGroup(name)) + (size ? ' ' + size : '');
+    if (name === '__other') return '<span class="' + cls + '">' + icon('plus') + '</span>';
+    if (name === '__none') return '<span class="pbadge g-none' + (size ? ' ' + size : '') + '">' + icon('list') + '</span>';
+    if (PROV_ICON[name]) return '<span class="' + cls + '">' + icon(PROV_ICON[name]) + '</span>';
+    return '<span class="' + cls + '" aria-hidden="true">' + esc(provCode(name)) + '</span>';
+  }
+  function syncPick(sel) {
+    var b = sel._pickBtn; if (!b) return;
+    var o = sel.options[sel.selectedIndex], v = sel.value;
+    var empty = !v, label = o ? o.text : '';
+    b.innerHTML = (empty ? '<span class="pbadge g-none">' + icon('list') + '</span>' : provBadge(v === '__other' ? '__other' : v)) +
+      '<span class="pt' + (empty ? ' ph' : '') + '">' + esc(label || 'Choose') + '</span><span class="chev" aria-hidden="true">›</span>';
+  }
+  function enhancePickers(root) {
+    var list = (root || document).querySelectorAll('select[data-pick]:not(.picked)');
+    for (var i = 0; i < list.length; i++) (function (sel) {
+      sel.classList.add('picked');
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'pickbtn';
+      var lab = sel.id && document.querySelector('label[for="' + sel.id + '"]');
+      b.setAttribute('aria-label', (lab ? lab.textContent : sel.getAttribute('aria-label') || 'Choose').replace(/\s*\*$/, ''));
+      sel.parentNode.insertBefore(b, sel.nextSibling); sel._pickBtn = b; syncPick(sel);
+      b.addEventListener('click', function () { openPicker(sel); });
+      sel.addEventListener('change', function () { syncPick(sel); });
+    })(list[i]);
+  }
+  var PICKER = null;
+  function openPicker(sel) {
+    closePicker();
+    var title = (sel._pickBtn && sel._pickBtn.getAttribute('aria-label')) || 'Choose';
+    var groups = {}, order = ['wallet', 'bank', 'mfi', 'way', 'own'], names = { own: 'Your Own' }, blank = null, other = null;
+    PROV_GROUPS.forEach(function (g) { names[g[0]] = g[1]; });
+    Array.prototype.forEach.call(sel.options, function (o) {
+      if (o.value === '') { blank = o; return; }
+      if (o.value === '__other') { other = o; return; }
+      var g = provGroup(o.value); (groups[g] = groups[g] || []).push(o);
+    });
+    function tile(value, text, badgeName) {
+      return '<button type="button" class="ptile' + (sel.value === value ? ' on' : '') + '" data-val="' + esc(value) + '" data-name="' + esc(text.toLowerCase()) + '">' +
+        provBadge(badgeName) + '<span>' + esc(text) + '</span></button>';
+    }
+    var h = '';
+    order.forEach(function (g) {
+      if (!groups[g]) return;
+      h += '<section class="pgroup"><h3>' + esc(names[g]) + '</h3><div class="pgrid">' + groups[g].map(function (o) { return tile(o.value, o.text, o.value); }).join('') + '</div></section>';
+    });
+    var extra = '';
+    if (blank && (sel.id === 'h-chan' || sel.classList.contains('b-channel'))) extra += tile('', blank.text, '__none');
+    if (other) extra += tile('__other', other.text, '__other');
+    if (extra) h += '<section class="pgroup"><div class="pgrid">' + extra + '</div></section>';
+    var count = sel.options.length;
+    var el = document.createElement('div'); el.id = 'pickerwrap';
+    el.innerHTML = '<div class="picker-back"></div><div class="picker" role="dialog" aria-modal="true" aria-label="' + esc(title) + '">' +
+      '<header><h2>' + esc(title) + '</h2><button type="button" class="pclose">Close</button></header>' +
+      (count > 9 ? '<div class="psearch"><input type="search" placeholder="Search" aria-label="Search" autocomplete="off"></div>' : '') +
+      '<div class="pbody">' + h + '</div></div>';
+    document.body.appendChild(el);
+    PICKER = { el: el, sel: sel };
+    history.pushState({ picker: 1 }, '');
+    el.querySelector('.picker-back').addEventListener('click', function () { history.back(); });
+    el.querySelector('.pclose').addEventListener('click', function () { history.back(); });
+    el.querySelector('.pbody').addEventListener('click', function (e) {
+      var t = e.target.closest('.ptile'); if (!t) return;
+      sel.value = t.getAttribute('data-val');
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      history.back();
+      if (sel.value === '__other') setTimeout(function () { var ob = sel.parentNode.querySelector('.otherbox, #b-chan-other'); if (ob) ob.focus(); }, 80);
+    });
+    var q = el.querySelector('.psearch input');
+    if (q) q.addEventListener('input', function () {
+      var v = q.value.trim().toLowerCase();
+      Array.prototype.forEach.call(el.querySelectorAll('.ptile'), function (t) { t.classList.toggle('hide', !!v && t.getAttribute('data-name').indexOf(v) < 0); });
+      Array.prototype.forEach.call(el.querySelectorAll('.pgroup'), function (g) { g.classList.toggle('hide', !g.querySelector('.ptile:not(.hide)')); });
+    });
+  }
+  /* Closes the picker. Returns true if one was open, so the back button only closes the picker. */
+  function closePicker() {
+    if (!PICKER) return false;
+    PICKER.el.remove(); PICKER = null;
+    return true;
+  }
+
   var toastTimer = null;
   function toast(msg) {
     var t = document.getElementById('toast');
@@ -400,13 +523,13 @@
     var body = (VIEWS[v.v] || VIEWS.home)(v);
     root.innerHTML = top + '<main>' + body + '</main>' + navBar() + fab(v);
     if (LISTS[v.v]) renderList();
-    decorateRows();
+    decorateRows(); enhancePickers(root);
   }
   function navBar() {
     var t = UI.stack[0].v;
     var items = [['home', 'Home'], ['customers', 'Customers'], ['agents', 'Agents'], ['history', 'History'], ['settings', 'Settings']];
     return '<nav class="nav" aria-label="Main">' + items.map(function (i) {
-      return '<button data-act="tab" data-v="' + i[0] + '" class="' + (t === i[0] ? 'on' : '') + '"' + (t === i[0] ? ' aria-current="page"' : '') + '>' + icon(i[0]) + '<span>' + i[1] + '</span></button>';
+      return '<button data-act="tab" data-v="' + i[0] + '" class="n-' + i[0] + (t === i[0] ? ' on' : '') + '"' + (t === i[0] ? ' aria-current="page"' : '') + '><span class="ni">' + icon(i[0]) + '</span><span>' + i[1] + '</span></button>';
     }).join('') + '</nav>';
   }
   function fab(v) {
@@ -426,6 +549,8 @@
   /* ================= Views ================= */
   var VIEWS = {};
 
+  function viaBank(v) { return v.channel === 'Bank Transfer' || v.channel === 'Microfinance'; }
+  function bankLabel(v) { return v && v.channel === 'Microfinance' ? 'Which Microfinance?' : 'Which Bank?'; }
   function tip(mode) { return mode === 'included' ? 'Tips (inside payments)' : mode === 'passon' ? 'Tips to Hand Over' : 'Tips (extra income)'; }
   function tile(color, act, v, ic, title, sub) {
     return '<button class="tile ' + color + '" data-act="' + act + '" data-v="' + v + '"><span class="ic">' + icon(ic) + '</span><b>' + esc(title) + '</b><small>' + esc(sub) + '</small></button>';
@@ -471,15 +596,16 @@
     if (t.overdue) chips += '<button class="chipa" data-act="salesFilterGo" data-v="overdue">' + icon('history') + '<span>' + t.overdue + ' overdue</span></button>';
     if (chips) h += '<div class="chipline">' + chips + '</div>';
     if (!hasData) h += '<div class="card"><b>Ready when you are</b><p class="hint" style="margin:6px 0 0">Tap New Sale to start.</p></div>';
-    var recent = histRows().sort(entryNewer).slice(0, 4);
-    if (recent.length) h += '<div class="sec-head"><b>Recent</b><button data-act="tab" data-v="history">See all</button></div><div class="recent">' + recent.map(entryRow).join('') + '</div>';
     var rk = R.risk.summary;
     h += '<div class="sec-head"><b>Tools</b></div><div class="toolgrid">' +
       tool('tab', 'history', 'history', 'History', '', 'c-blue') + tool('tab', 'customers', 'customers', 'Customers', '', 'c-teal') + tool('tab', 'agents', 'agents', 'Agents', '', 'c-purple') +
       tool('go', 'risk', 'risk', 'Risk', rk.high || '', 'c-orange') + tool('go', 'share', 'chat', 'Reminders', '', 'c-blue') + tool('go', 'daily', 'cash', 'Cash Check', '', 'c-teal') +
       tool('go', 'recon', 'recon', 'Monthly Check', '', 'c-blue') + tool('go', 'capital', 'capital', 'Capital', '', 'c-purple') + tool('go', 'comm', 'comm', 'Commissions', '', 'c-teal') +
       tool('go', 'ref', 'customers', 'Referrals', '', 'c-blue') + tool('go', 'expenses', 'expense', 'Money Out', '', 'c-orange') + tool('go', 'losses', 'loss', 'Losses', '', 'c-orange') +
-      tool('go', 'reports', 'chart', 'Reports', '', 'c-blue') + '</div>';
+      tool('go', 'reports', 'chart', 'Reports', '', 'c-blue') + tool('go', 'backup', 'backup', 'Backup', '', 'c-orange') +
+      tool('go', 'security', 'lock', 'Security', '', 'c-purple') + tool('go', 'help', 'help', 'Help', '', 'c-teal') + '</div>';
+    var recent = histRows().sort(entryNewer).slice(0, 4);
+    if (recent.length) h += '<div class="sec-head"><b>Recent</b><button data-act="tab" data-v="history">See all</button></div><div class="recent">' + recent.map(entryRow).join('') + '</div>';
     return h;
   };
   VIEWS.reports = function () {
@@ -601,7 +727,7 @@
       chips('hType', UI.hType, H_TYPES) + chips('hRange', UI.hRange, H_RANGES) +
       (UI.hRange === 'custom' ? '<div class="two"><div class="field"><label for="h-from">From</label><input id="h-from" type="date" value="' + esc(UI.hFrom) + '"></div><div class="field"><label for="h-to">To</label><input id="h-to" type="date" value="' + esc(UI.hTo) + '"></div></div>' : '') +
       '<div class="two"><div class="field"><label for="h-status">Payment Status</label><select id="h-status">' + [['all', 'All'], ['notpaid', 'Not Fully Paid'], ['overdue', 'Overdue'], ['paid', 'Paid or Overpaid']].map(function (o) { return '<option value="' + o[0] + '"' + (UI.hStatus === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
-      '<div class="field"><label for="h-chan">Paid Through</label><select id="h-chan"><option value="">All</option>' + channelsUsed().map(function (c) { return '<option' + (UI.hChannel === c ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></div></div>' +
+      '<div class="field"><label for="h-chan">Paid Through</label><select id="h-chan" data-pick="1"><option value="">All</option>' + channelsUsed().map(function (c) { return '<option' + (UI.hChannel === c ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></div></div>' +
       '<div id="hist-count" class="hint"></div><div id="list"></div>';
   };
   LISTS.history = function () {
@@ -657,9 +783,11 @@
     var amounts = r.isPayment ? 'Paid ' + money(num(r.received)) : 'Billed ' + money(r.billed) + ', paid ' + money(num(r.received));
     if (num(r.tip)) amounts += ', tip ' + money(num(r.tip));
     return '<button class="row" data-act="editSale" data-id="' + esc(r.id) + '">' +
-      '<div class="top"><div><div class="name">' + esc(r.name || 'No name') + '</div><div class="detail">' + esc(what) + (r.time ? ' · ' + esc(r.time) : '') + ' · ' + esc(r.refId) + (r.channel ? ' · ' + esc(r.channel) : '') + '</div></div>' + pill(r.status, STATUS_CLASS[r.status]) + '</div>' +
+      '<div class="top"><div><div class="name">' + esc(r.name || 'No name') + '</div><div class="detail">' + esc(what) + (r.time ? ' · ' + esc(r.time) : '') + ' · ' + esc(r.refId) + '</div></div>' + pill(r.status, STATUS_CLASS[r.status]) + '</div>' +
       '<div class="bottom"><span class="c-muted num">' + esc(amounts) + esc(late) + esc(delayed) + '</span>' +
-      (r.billedSet ? balanceText(r.balance) : '') + '</div>' + (r.payMode === 'credit' && r.remaining > 0 ? '<div class="detail" style="margin-top:4px">Sold on credit</div>' : '') + '</button>';
+      (r.billedSet ? balanceText(r.balance) : '') + '</div>' +
+      (r.channel ? (function (via) { return '<div class="chanline">' + provBadge(via, 'xs') + '<span>' + esc(via) + '</span></div>'; })(r.bank && viaBank(r) ? r.bank : r.channel) : '') +
+      (r.payMode === 'credit' && r.remaining > 0 ? '<div class="detail" style="margin-top:4px">Sold on credit</div>' : '') + '</button>';
   }
   function refRow(r) {
     return '<button class="row" data-act="editRef" data-id="' + esc(r.id) + '"><div class="top"><div><div class="name">' + esc(r.agent || 'No agent') + '</div><div class="detail">Referral Sale' + (r.time ? ' · ' + esc(r.time) : '') + ' · ' + esc(r.service || '') + ' · ' + esc(r.refId) + '</div></div><span class="amount">' + money(num(r.amount)) + '</span></div>' +
@@ -1157,7 +1285,7 @@
   };
 
   /* ----- Your Choices (editable lists) ----- */
-  var SETTING_LISTS = [['channels', 'Payment Channels'], ['exTypes', 'Wallet Exchange Types'], ['agentTxTypes', 'Agent Transaction Types'],
+  var SETTING_LISTS = [['channels', 'Payment Channels'], ['banks', 'Banks and Microfinance'], ['exTypes', 'Wallet Exchange Types'], ['agentTxTypes', 'Agent Transaction Types'],
     ['wallets', 'Commission Wallets'], ['evcProviders', 'EVC Operators'], ['capitalAccounts', 'Capital and Cash Accounts'],
     ['expenseCats', 'Money Out Categories'], ['woReasons', 'Write-Off Reasons'], ['errorTypes', 'Error Types'], ['causedBy', 'Who Caused an Error']];
   VIEWS.choices = function () {
@@ -1413,7 +1541,7 @@
       { k: 'payMode', t: 'paymode', label: 'How Was It Paid?', req: 1 },
       { k: 'received', t: 'num', label: 'Amount Received So Far', req: isPart, show: isPart },
       { k: 'channel', t: 'selectother', label: 'Paid Through', opts: 'channels', req: isPaid, show: isPaid },
-      { k: 'bank', t: 'text', label: 'Bank Name', show: function (v) { return isPaid(v) && v.channel === 'Bank Transfer'; } },
+      { k: 'bank', t: 'selectother', label: bankLabel, opts: 'banks', show: function (v) { return isPaid(v) && viaBank(v); } },
       { k: 'costDs', t: 'num', label: 'What the Data or Airtime Cost You (Optional)', note: 'Used in your balance checks.', more: 1, show: notWE },
       { k: 'tip', t: 'num', label: tipLabel, more: 1 },
       { k: 'beneficiary', t: 'tel', label: 'Number That Received the Data or Money (If Different)', more: 1 },
@@ -1430,7 +1558,7 @@
       { k: 'name', t: 'text', label: 'Customer Name', req: 1, list: 'custNames' },
       { k: 'received', t: 'num', label: 'Amount Paid', req: 1 },
       { k: 'channel', t: 'selectother', label: 'Paid Through', opts: 'channels', req: 1 },
-      { k: 'bank', t: 'text', label: 'Bank Name', show: function (v) { return v.channel === 'Bank Transfer'; } },
+      { k: 'bank', t: 'selectother', label: bankLabel, opts: 'banks', show: viaBank },
       { k: 'tip', t: 'num', label: tipLabel, more: 1 },
       { k: 'notes', t: 'area', label: 'Notes', more: 1 }],
       defaults: function () { return { date: '', channel: '' }; },
@@ -1602,7 +1730,7 @@
     var inp;
     if (f.t === 'select' || f.t === 'selectother') {
       var o = opts(f.opts).slice(); if (v && o.indexOf(v) < 0) o.unshift(v);
-      inp = '<select id="' + id + '" name="' + f.k + '"><option value="">Choose</option>' + o.map(function (x) { return '<option' + (x === v ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('') +
+      inp = '<select id="' + id + '" name="' + f.k + '"' + (PICK_LISTS[f.opts] ? ' data-pick="1"' : '') + '><option value="">Choose</option>' + o.map(function (x) { return '<option' + (x === v ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('') +
         (f.t === 'selectother' ? '<option value="__other">Other (type your own)…</option>' : '') + '</select>';
       if (f.t === 'selectother') inp += '<input class="otherbox hide" name="' + f.k + '__other" placeholder="Type it here" aria-label="Other, type your own" autocomplete="off">';
     } else if (f.t === 'area') {
@@ -1699,6 +1827,7 @@
     document.body.appendChild(el);
     UI.sheetOpen = true; document.body.style.overflow = 'hidden';
     history.pushState({ sheet: 1 }, '');
+    setTimeout(function () { enhancePickers(el); }, 0);
   }
   function removeSheet() {
     var el = document.getElementById('sheetwrap'); if (el) el.remove();
@@ -1853,7 +1982,7 @@
       '<div class="two"><div class="field"><label>Amount</label><input type="number" step="any" inputmode="decimal" class="b-amount" aria-label="Amount"></div>' +
       '<div class="field"><label>How Was It Paid?</label><select class="b-pay" aria-label="How was it paid">' + payOptions(S.settings.payDefault || '') + '</select></div></div>' +
       '<div class="field b-recv-wrap hide"><label>Amount Received So Far</label><input type="number" step="any" inputmode="decimal" class="b-received" aria-label="Amount received so far"></div>' +
-      '<div class="field"><label>Paid Through</label><select class="b-channel" aria-label="Paid through">' + chanOptions('Same as above') + '</select></div></div>';
+      '<div class="field"><label>Paid Through</label><select class="b-channel" data-pick="1" aria-label="Paid through">' + chanOptions('Same as above') + '</select></div></div>';
   }
   function agentBatchRow(i) {
     return '<div class="batch-row"><div class="batch-head"><b>Entry ' + (i + 1) + '</b><button type="button" class="linkbtn" data-act="batchRemove">Remove</button></div>' + dateTimeRow() +
@@ -1868,7 +1997,7 @@
     UI.batchMode = mode === 'agent' ? 'agent' : 'sale'; UI.batchDate = ''; UI.batchKind = 'DS';
     var isAgent = UI.batchMode === 'agent', top = '<div id="batch-top">' + (isAgent ? '' : seg('batchKind', 'DS', [['DS', 'Data / Deposit'], ['WE', 'Wallet Exchange']])) +
       fieldHTML({ k: 'bdate', t: 'pickdate', label: isAgent ? 'Date for These Entries' : 'Date for These Sales' }, {}) +
-      (isAgent ? '' : '<div class="field"><label for="b-chan">Paid Through, for All Rows</label><select id="b-chan">' + chanOptions('Choose', '') + '<option value="__other">Other (type your own)…</option></select>' +
+      (isAgent ? '' : '<div class="field"><label for="b-chan">Paid Through, for All Rows</label><select id="b-chan" data-pick="1">' + chanOptions('Choose', '') + '<option value="__other">Other (type your own)…</option></select>' +
         '<input class="otherbox hide" id="b-chan-other" placeholder="Type it here" aria-label="Other, type your own" autocomplete="off"></div>' +
         '<div class="field hide" id="b-ex-wrap"><label for="b-ex">Exchange Type, for All Rows</label><select id="b-ex"><option value="">Choose</option>' + opts('exTypes').map(function (x) { return '<option>' + esc(x) + '</option>'; }).join('') + '</select></div>') + '</div>';
     var body = '<p class="hint" style="margin-top:0">Type several ' + (isAgent ? 'entries' : 'sales') + ', then save them all at once. The date you choose goes on every row, and you can still change any row\'s date.</p>' +
@@ -2189,7 +2318,7 @@
     },
     batchAdd: function () {
       var box = document.getElementById('batch-rows'), n = box.querySelectorAll('.batch-row').length;
-      box.insertAdjacentHTML('beforeend', batchRowHTML(n));
+      box.insertAdjacentHTML('beforeend', batchRowHTML(n)); enhancePickers(box);
       var last = box.lastElementChild; last.scrollIntoView({ block: 'start' }); var first = last.querySelector('.b-phone, .b-agent'); if (first) first.focus();
     },
     batchRemove: function (d, el) { el.closest('.batch-row').remove(); renumberBatch(); },

@@ -967,3 +967,5 @@ I18N.add('fr', {
   [/^(\d+) overdue$/, "$1 en retard"]
  ]);
 I18N.add('fr', { "entries today": "saisies aujourd'hui", "entry today": "saisie aujourd'hui", "Unlock Agent & Client Tracker": "Déverrouiller Agent & Client Tracker", "Use PIN": "Utiliser le code" });
+I18N.add('fr', { "Mobile Money": "Mobile money", "Banks": "Banques", "Microfinance": "Microfinance", "Other Ways": "Autres moyens", "Your Own": "Les vôtres", "Search": "Rechercher", "Which Bank?": "Quelle banque ?", "Which Microfinance?": "Quelle microfinance ?", "Banks and Microfinance": "Banques et microfinance" });
+I18N.add('fr', { "Backup": "Sauvegarde", "Help": "Aide" });

@@ -1,5 +1,5 @@
 /* Offline support: keeps the app's files (and the Firebase library) on the phone. */
-var CACHE = 'business-tracker-v13';
+var CACHE = 'business-tracker-v14';
 var FILES = ['./', './index.html', './styles.css', './config.js', './i18n.js', './lang-fr.js', './lang-pt.js', './countries.js', './calc.js', './themes.js', './security.js', './sync.js', './app.js', './privacy.html', './delete-account.html', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png'];
 self.addEventListener('install', function (e) {
