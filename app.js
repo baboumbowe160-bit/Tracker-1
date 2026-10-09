@@ -43,13 +43,12 @@
     tipMode: 'extra',
     payDefault: '',
     channels: ['Wave', 'APS', 'Afrimoney', 'QMoney', 'Nafa', 'Yonna', 'ComCach', 'Bank Transfer', 'Microfinance', 'Cash'],
-    banks: ['Access Bank', 'Agib Bank', 'BSIC', 'Bloom Bank', 'Ecobank', 'First Bank', 'GTBank', 'Mega Bank', 'Trust Bank', 'Vista Bank', 'Zenith Bank',
-      'APS Islamic Microfinance', 'Bayba Financial Services', 'Kolomoni Microfinance', 'NACCUG Credit Union', 'Reliance Financial Services', 'Salam Financial Services', 'Yonna Islamic Microfinance', 'VISACA (Village Bank)'],
+    banks: ['Access Bank', 'Agib Bank', 'Bloom Bank', 'Ecobank', 'First Bank', 'GTBank', 'Mega Bank', 'Trust Bank', 'Vista Bank', 'Zenith Bank', 'Reliance Financial Services'],
     exTypes: ['Bank-to-Wallet', 'Wallet-to-Bank', 'Deposit', 'Other'],
     agentTxTypes: ['Float Transfer/Rebalancing (between wallets)', 'EVC/Voucher Transaction', 'Bank to Bank Exchange', 'Bank to Wallet Exchange', 'Wallet to Bank Exchange', 'Other'],
-    wallets: ['Wave', 'APS', 'Afrimoney', 'QMoney', 'Nafa', 'ComCach', 'Yonna Wallet', 'Xpress Point', 'Suturamoney', 'Other'],
+    wallets: ['Wave', 'APS', 'Afrimoney', 'QMoney', 'Nafa', 'ComCach', 'Yonna Wallet', 'Suturamoney', 'Other'],
     evcProviders: ['Comium EVC', 'Africell EVC', 'Qcell EVC', 'Gamcel EVC'],
-    capitalAccounts: ['Cash in Hand', 'Wave', 'APS', 'Afrimoney', 'QMoney', 'Nafa', 'ComCach', 'Yonna Wallet', 'Xpress Point', 'Suturamoney', 'Bank', 'EVC Stock'],
+    capitalAccounts: ['Cash in Hand', 'Wave', 'APS', 'Afrimoney', 'QMoney', 'Nafa', 'ComCach', 'Yonna Wallet', 'Suturamoney', 'Bank', 'EVC Stock'],
     expenseCats: ['Data / Airtime Purchase', 'Rent', 'Transport', 'Staff', 'Owner Withdrawal', 'Tips Handed Over', 'Bank Charges', 'Other'],
     woReasons: ['Customer unreachable/disappeared', 'Agent defaulted', 'Error-caused loss', 'Fraud/Scam', 'Business decision (waived)', 'Other'],
     errorTypes: ['Wrong amount charged', 'Wrong customer/agent billed', 'Duplicate entry', 'Wrong exchange rate', 'Wrong data bundle', 'Reconciliation mismatch', 'Other'],
@@ -106,6 +105,15 @@
       var before = S.capital.length;
       S.capital = S.capital.filter(function (s) { return !C.snapEmpty(s) || (s.notes && String(s.notes).trim()); });
       m.v3 = true; if (S.capital.length !== before) changed = true;
+    }
+    if (!m.v20) {
+      // Only payment options with a real logo stay in the lists. Old records keep the name they were saved with.
+      var gone = ['BSIC', 'Xpress Point', 'APS Islamic Microfinance', 'Bayba Financial Services', 'Kolomoni Microfinance', 'NACCUG Credit Union',
+        'Salam Financial Services', 'Yonna Islamic Microfinance', 'VISACA (Village Bank)'];
+      ['channels', 'wallets', 'banks', 'capitalAccounts'].forEach(function (k) {
+        if (Array.isArray(S.settings[k])) S.settings[k] = S.settings[k].filter(function (x) { return gone.indexOf(x) < 0; });
+      });
+      m.v20 = true; changed = true;
     }
     if (!m.v13) {
       // Microfinance became a way to be paid. Add it once, before Cash.
@@ -227,9 +235,9 @@
   /* ================= Payment providers: groups, badges and the picker ================= */
   var PICK_LISTS = { channels: 1, banks: 1, wallets: 1 };
   var PROV_GROUPS = [
-    ['wallet', 'Mobile Money', ['Wave', 'APS', 'Afrimoney', 'QMoney', 'Nafa', 'Yonna', 'Yonna Wallet', 'ComCach', 'Xpress Point', 'Suturamoney']],
-    ['bank', 'Banks', ['Access Bank', 'Agib Bank', 'BSIC', 'Bloom Bank', 'Ecobank', 'First Bank', 'GTBank', 'Mega Bank', 'Trust Bank', 'Vista Bank', 'Zenith Bank']],
-    ['mfi', 'Microfinance', ['APS Islamic Microfinance', 'Bayba Financial Services', 'Kolomoni Microfinance', 'NACCUG Credit Union', 'Reliance Financial Services', 'Salam Financial Services', 'Yonna Islamic Microfinance', 'VISACA (Village Bank)']],
+    ['wallet', 'Mobile Money', ['Wave', 'APS', 'Afrimoney', 'QMoney', 'Nafa', 'Yonna', 'Yonna Wallet', 'ComCach', 'Suturamoney']],
+    ['bank', 'Banks', ['Access Bank', 'Agib Bank', 'Bloom Bank', 'Ecobank', 'First Bank', 'GTBank', 'Mega Bank', 'Trust Bank', 'Vista Bank', 'Zenith Bank']],
+    ['mfi', 'Microfinance', ['Reliance Financial Services']],
     ['way', 'Other Ways', ['Bank Transfer', 'Microfinance', 'Cash', 'Cash in Hand']]
   ];
   var PROV_CODE = { 'Wave': 'WV', 'APS': 'APS', 'Afrimoney': 'AM', 'QMoney': 'QM', 'Nafa': 'NF', 'Yonna': 'YN', 'Yonna Wallet': 'YN', 'ComCach': 'CC',
@@ -240,7 +248,9 @@
   /* Official logos supplied by the owner, kept in the logos folder. Providers without one show their badge. */
   var PROV_LOGO = { 'Wave': 'logos/wave.png', 'APS': 'logos/aps.png', 'Nafa': 'logos/nafa.png', 'ComCach': 'logos/comcach.png',
     'Afrimoney': 'logos/afrimoney.png', 'QMoney': 'logos/qmoney.png', 'Yonna': 'logos/yonna.png', 'Yonna Wallet': 'logos/yonna.png',
-    'Suturamoney': 'logos/suturamoney.png', 'Access Bank': 'logos/accessbank.png' };
+    'Suturamoney': 'logos/suturamoney.png', 'Access Bank': 'logos/accessbank.png', 'Agib Bank': 'logos/agib.png', 'Vista Bank': 'logos/vista.png',
+    'Bloom Bank': 'logos/bloom.png', 'Ecobank': 'logos/ecobank.png', 'First Bank': 'logos/firstbank.png', 'GTBank': 'logos/gtbank.png',
+    'Mega Bank': 'logos/megabank.png', 'Trust Bank': 'logos/trustbank.png', 'Zenith Bank': 'logos/zenith.png', 'Reliance Financial Services': 'logos/reliance.png' };
   var PROV_ICON = { 'Bank Transfer': 'bank', 'Microfinance': 'mfi', 'Cash': 'cash', 'Cash in Hand': 'cash' };
   var provIndex = null;
   function provGroup(name) {
