@@ -378,14 +378,14 @@
   function pill(text, cls) { return text ? '<span class="pill ' + (cls || 'p-paid') + '">' + esc(text) + '</span>' : ''; }
   function balanceText(b, big) {
     var cls = big ? 'big ' : 'amount ';
-    if (b > 0) return '<span class="' + cls + 'c-owed">To Collect ' + money(b) + '</span>';
-    if (b < 0) return '<span class="' + cls + 'c-credit">Credit ' + money(-b) + '</span>';
+    if (b > 0) return '<span class="' + cls + 'c-owed">Owes ' + money(b) + '</span>';
+    if (b < 0) return '<span class="' + cls + 'c-credit">Paid Ahead ' + money(-b) + '</span>';
     return '<span class="' + (big ? 'big ' : '') + 'c-muted" style="font-weight:600">Settled</span>';
   }
   function agentNetText(n, big) {
     var cls = big ? 'big ' : 'amount ';
-    if (n > 0) return '<span class="' + cls + 'c-owed">To Collect ' + money(n) + '</span>';
-    if (n < 0) return '<span class="' + cls + '" style="color:var(--blue)">To Pay ' + money(-n) + '</span>';
+    if (n > 0) return '<span class="' + cls + 'c-owed">Owes Us ' + money(n) + '</span>';
+    if (n < 0) return '<span class="' + cls + '" style="color:var(--blue)">We Owe ' + money(-n) + '</span>';
     return '<span class="' + cls + 'c-muted">Settled</span>';
   }
   function kv(label, value) { return '<div class="kv"><span>' + esc(label) + '</span><b>' + value + '</b></div>'; }
@@ -554,7 +554,7 @@
     var body = (VIEWS[v.v] || VIEWS.home)(v);
     root.innerHTML = top + '<main>' + body + '</main>' + navBar() + fab(v);
     if (LISTS[v.v]) renderList();
-    decorateRows(); enhancePickers(root);
+    decorateRows(); enhancePickers(root); foldHints(root);
     if (UI.pendingShare && !UI.sheetOpen) { var ps = UI.pendingShare; UI.pendingShare = null; UI.resumeTried = true; setTimeout(function () { openCapture(ps.text, ps.id, ps.when); }, 60); }
     else if (!UI.resumeTried && !UI.sheetOpen) {
       UI.resumeTried = true;
@@ -624,27 +624,27 @@
       '<div class="label">Money received today</div><div class="big">' + money(dayNow.received) + '</div>' +
       '<div class="hero-acts"><button class="btn-new" data-act="newSale"><span class="plus">+</span><span>New Sale</span></button>' +
       '<button class="btn-msg" data-act="captureOpen" aria-label="Record from a message">' + icon('chat') + '<span>Message</span></button></div></div>';
-    h += '<div class="shortcuts">' + sc('newPayment', 'pay', 'Payment', '', 'c-green') + sc('newAgent', 'agents', 'Agent', '', 'c-purple') + sc('newExpense', 'expense', 'Money Out', '', 'c-orange') +
-      sc('newCapital', 'cash', 'Balances', '', 'c-teal') + sc('go', 'chat', 'Reminder', 'share', 'c-blue') + '</div>';
-    h += '<div class="owed"><button data-act="custFilterGo" data-v="owing"><span class="lab">To Collect</span><b class="c-owed">' + money(r2(t.owed + ag.collect)) + '</b>' +
+    h += '<div class="shortcuts">' + sc('newPayment', 'pay', 'Debt Paid', '', 'c-green') + sc('newAgent', 'agents', 'Agent', '', 'c-purple') + sc('newExpense', 'expense', 'Money Out', '', 'c-orange') +
+      sc('newCapital', 'cash', 'Balances', '', 'c-teal') + '</div>';
+    h += '<div class="owed"><button data-act="custFilterGo" data-v="owing"><span class="lab">Owed to Us</span><b class="c-owed">' + money(r2(t.owed + ag.collect)) + '</b>' +
       '<small>' + owing + ' ' + (owing === 1 ? 'customer' : 'customers') + ' · ' + ag.n + ' ' + (ag.n === 1 ? 'agent' : 'agents') + '</small></button>' +
-      '<button data-act="tab" data-v="agents"><span class="lab">To Pay</span><b>' + money(r2(t.credit + ag.pay)) + '</b><small>Agents and advance payments</small></button></div>';
+      '<button data-act="tab" data-v="agents"><span class="lab">We Owe</span><b>' + money(r2(t.credit + ag.pay)) + '</b><small>Agents and advances</small></button></div>';
     var chips = '', waiting = inboxGet().length, nDrafts = draftsGet().length;
     if (nDrafts) chips += '<button class="chipa draft" data-act="draftsOpen">' + icon('rules') + '<span>' + nDrafts + (nDrafts === 1 ? ' draft' : ' drafts') + '</span></button>';
     if (waiting) chips += '<button class="chipa msg" data-act="capInbox">' + icon('chat') + '<span>' + waiting + (waiting === 1 ? ' message to record' : ' messages to record') + '</span></button>';
     if (R.risk.alerts.length) chips += '<button class="chipa warn" data-act="go" data-v="risk">' + icon('risk') + '<span>' + R.risk.alerts.length + (R.risk.alerts.length === 1 ? ' risk alert' : ' risk alerts') + '</span></button>';
     if (t.overdue) chips += '<button class="chipa" data-act="salesFilterGo" data-v="overdue">' + icon('history') + '<span>' + t.overdue + ' overdue</span></button>';
     if (chips) h += '<div class="chipline">' + chips + '</div>';
-    if (!hasData) h += '<div class="card"><b>Ready when you are</b><p class="hint" style="margin:6px 0 0">Tap New Sale to start.</p></div>';
+    if (!hasData) h += '<p class="hint" style="text-align:center;margin:4px 0 12px">No entries yet. Tap New Sale to start.</p>';
     var rk = R.risk.summary;
-    h += '<div class="sec-head"><b>Tools</b></div><div class="toolgrid">' +
-      tool('tab', 'history', 'history', 'History', '', 'c-blue') + tool('tab', 'customers', 'customers', 'Customers', '', 'c-teal') + tool('tab', 'agents', 'agents', 'Agents', '', 'c-purple') +
-      tool('go', 'risk', 'risk', 'Risk', rk.high || '', 'c-orange') + tool('go', 'share', 'chat', 'Reminders', '', 'c-blue') + tool('go', 'daily', 'cash', 'Cash Check', '', 'c-teal') +
-      tool('go', 'recon', 'recon', 'Monthly Check', '', 'c-blue') + tool('go', 'capital', 'capital', 'Capital', '', 'c-purple') + tool('go', 'comm', 'comm', 'Commissions', '', 'c-teal') +
-      tool('go', 'ref', 'customers', 'Referrals', '', 'c-blue') + tool('go', 'expenses', 'expense', 'Money Out', '', 'c-orange') + tool('go', 'losses', 'loss', 'Losses', '', 'c-orange') +
-      tool('go', 'reports', 'chart', 'Reports', '', 'c-blue') + tool('go', 'backup', 'backup', 'Backup', '', 'c-orange') +
-      tool('go', 'security', 'lock', 'Security', '', 'c-purple') + tool('go', 'help', 'help', 'Help', '', 'c-teal') + '</div>';
-    var recent = histRows().sort(entryNewer).slice(0, 4);
+    var mainTools = tool('go', 'reports', 'chart', 'Reports', '', 'c-blue') + tool('go', 'share', 'chat', 'Reminders', '', 'c-teal') + tool('go', 'daily', 'cash', 'Cash Check', '', 'c-green') +
+      tool('go', 'comm', 'comm', 'Commissions', '', 'c-purple') + tool('go', 'risk', 'risk', 'Risk', rk.high || '', 'c-orange') + tool('go', 'expenses', 'expense', 'Money Out', '', 'c-orange') +
+      tool('go', 'capital', 'capital', 'Capital', '', 'c-blue');
+    var moreTools = tool('go', 'recon', 'recon', 'Monthly Check', '', 'c-blue') + tool('go', 'ref', 'customers', 'Referrals', '', 'c-teal') + tool('go', 'losses', 'loss', 'Losses', '', 'c-orange') +
+      tool('go', 'backup', 'backup', 'Backup', '', 'c-green') + tool('go', 'security', 'lock', 'Security', '', 'c-purple') + tool('go', 'help', 'help', 'Help', '', 'c-blue');
+    var toggle = '<button class="tool" data-act="moreTools"><span class="ic c-gray">' + icon(UI.moreTools ? 'plus' : 'more') + '</span><span>' + (UI.moreTools ? 'Less' : 'More') + '</span></button>';
+    h += '<div class="toolgrid' + (UI.moreTools ? ' open' : '') + '">' + mainTools + (UI.moreTools ? moreTools : '') + toggle + '</div>';
+    var recent = histRows().sort(entryNewer).slice(0, 3);
     if (recent.length) h += '<div class="sec-head"><b>Recent</b><button data-act="tab" data-v="history">See all</button></div><div class="recent">' + recent.map(entryRow).join('') + '</div>';
     return h;
   };
@@ -685,7 +685,7 @@
     var commM = (R.commMonths.filter(function (x) { return x.month === month; })[0] || {}).total || 0;
     var mNow = R.months.filter(function (x) { return x.month === month; })[0] || { tips: 0, billed: 0, paid: 0 };
     h += '<div class="figures">' +
-      '<button class="figure" data-act="custFilterGo" data-v="owing" style="text-align:left"><div class="label">To Collect from Customers</div><div class="big c-owed">' + money(t.owed) + '</div></button>' +
+      '<button class="figure" data-act="custFilterGo" data-v="owing" style="text-align:left"><div class="label">Customers Owe Us</div><div class="big c-owed">' + money(t.owed) + '</div></button>' +
       '<button class="figure" data-act="custFilterGo" data-v="credit" style="text-align:left"><div class="label">Paid in Advance</div><div class="big c-credit">' + money(t.credit) + '</div></button>' +
       '<button class="figure" data-act="salesFilterGo" data-v="overdue" style="text-align:left"><div class="label">Overdue Sales</div><div class="big ' + (t.overdue ? 'c-late' : '') + '">' + t.overdue + '</div></button>' +
       '<button class="figure" data-act="go" data-v="rules" style="text-align:left"><div class="label">' + tip(R.tipMode) + '</div><div class="big c-credit">' + money(mNow.tips) + '</div><div class="sub">This month. All time ' + money(t.tips) + '</div></button>' +
@@ -849,18 +849,21 @@
     if (rows.length > shown.length) h += '<button class="more-btn" data-act="showMore">Show more (' + (rows.length - shown.length) + ' older)</button>';
     return h;
   }
+  /* One short row per sale: who and how much on top, then the state of the money and how it was paid. */
+  function viaOf(r) { return r.bank && viaBank(r) ? r.bank : r.channel; }
+  function viaChip(r) { var via = viaOf(r); return via ? '<span class="via">' + provBadge(via, 'xs') + '<span>' + esc(via) + '</span></span>' : ''; }
   function saleRow(r) {
-    var what = r.isPayment ? 'Payment Received' : (r.details || (r.kind === 'WE' ? (r.exType || 'Wallet Exchange') : 'Data / Deposit'));
-    var late = r.daysOverdue ? ', ' + r.daysOverdue + ' days' : '';
-    var delayed = r.daysDelayed ? ', paid ' + r.daysDelayed + ' days late' : '';
-    var amounts = r.isPayment ? 'Paid ' + money(num(r.received)) : 'Billed ' + money(r.billed) + ', paid ' + money(num(r.received));
-    if (num(r.tip)) amounts += ', tip ' + money(num(r.tip));
+    var what = r.isPayment ? 'Debt Payment' : (r.details || (r.kind === 'WE' ? (r.exType || 'Wallet Exchange') : 'Data / Deposit'));
+    var amount = r.isPayment ? '<span class="amount c-credit">+' + money(num(r.received)) + '</span>' : '<span class="amount">' + money(r.billed) + '</span>';
+    var state = '';
+    if (!r.isPayment && r.billedSet) {
+      if (r.balance > 0) state = '<span class="state owe">' + (r.status === 'Overdue' ? 'Overdue · ' : '') + 'Owes ' + money(r.balance) + (r.daysOverdue ? ' · ' + r.daysOverdue + ' days' : '') + '</span>';
+      else if (r.balance < 0) state = '<span class="state ahead">Paid Ahead ' + money(-r.balance) + '</span>';
+      else state = '<span class="state ok">Paid</span>';
+    }
     return '<button class="row" data-act="editSale" data-id="' + esc(r.id) + '">' +
-      '<div class="top"><div><div class="name">' + esc(r.name || 'No name') + '</div><div class="detail">' + esc(what) + (r.time ? ' · ' + esc(r.time) : '') + ' · ' + esc(r.refId) + '</div></div>' + pill(r.status, STATUS_CLASS[r.status]) + '</div>' +
-      '<div class="bottom"><span class="c-muted num">' + esc(amounts) + esc(late) + esc(delayed) + '</span>' +
-      (r.billedSet ? balanceText(r.balance) : '') + '</div>' +
-      (r.channel ? (function (via) { return '<div class="chanline">' + provBadge(via, 'xs') + '<span>' + esc(via) + '</span></div>'; })(r.bank && viaBank(r) ? r.bank : r.channel) : '') +
-      (r.payMode === 'credit' && r.remaining > 0 ? '<div class="detail" style="margin-top:4px">Sold on credit</div>' : '') + '</button>';
+      '<div class="top"><div><div class="name">' + esc(r.name || 'No name') + '</div><div class="detail">' + esc(what) + (r.time ? ' · ' + esc(r.time) : '') + '</div></div>' + amount + '</div>' +
+      ((state || viaOf(r)) ? '<div class="bottom">' + (state || '<span></span>') + viaChip(r) + '</div>' : '') + '</button>';
   }
   function refRow(r) {
     return '<button class="row" data-act="editRef" data-id="' + esc(r.id) + '"><div class="top"><div><div class="name">' + esc(r.agent || 'No agent') + '</div><div class="detail">Referral Sale' + (r.time ? ' · ' + esc(r.time) : '') + ' · ' + esc(r.service || '') + ' · ' + esc(r.refId) + '</div></div><span class="amount">' + money(num(r.amount)) + '</span></div>' +
@@ -874,10 +877,10 @@
   VIEWS.customers = function () {
     var t = R.totals;
     return '<input class="search" id="q-cust" type="search" placeholder="Search name or phone" aria-label="Search customers" value="' + esc(UI.custQuery) + '">' +
-      '<div class="chips">' + [['all', 'All'], ['owing', 'To Collect'], ['credit', 'Paid in Advance'], ['Regular', 'Regular'], ['Irregular', 'Irregular'], ['bad', 'Bad or No Credit']].map(function (c) {
+      '<div class="chips">' + [['all', 'All'], ['owing', 'Owing'], ['credit', 'Paid Ahead'], ['Regular', 'Regular'], ['Irregular', 'Irregular'], ['bad', 'Bad or No Credit']].map(function (c) {
         return '<button data-act="custFilter" data-v="' + c[0] + '" class="' + (UI.custFilter === c[0] ? 'on' : '') + '">' + c[1] + '</button>';
       }).join('') + '</div>' +
-      '<p class="hint">' + R.customers.length + ' customers. To collect: ' + money(t.owed) + '. Paid in advance: ' + money(t.credit) + '.</p><div id="list"></div>';
+      '<p class="hint">' + R.customers.length + ' customers · owing ' + money(t.owed) + ' · paid ahead ' + money(t.credit) + '</p><div id="list"></div>';
   };
   LISTS.customers = function () {
     var q = UI.custQuery.trim().toLowerCase(), f = UI.custFilter;
@@ -929,7 +932,7 @@
     if (bal.length) {
       h += '<div class="section-title">Balances</div>';
       h += bal.map(function (a) {
-        return '<button class="row" data-act="openAgent" data-key="' + esc(a.key) + '"><div class="top"><div><div class="name">' + esc(a.name) + '</div><div class="detail">' + esc(phoneLine(a.phone)) + ', ' + a.entries + ' entries</div></div>' + agentNetText(a.net) + '</div>' +
+        return '<button class="row" data-act="openAgent" data-key="' + esc(a.key) + '"><div class="top"><div><div class="name">' + esc(a.name) + '</div><div class="detail">' + esc((a.phone ? phoneLine(a.phone) + ' · ' : '') + a.entries + (a.entries === 1 ? ' entry' : ' entries')) + '</div></div>' + agentNetText(a.net) + '</div>' +
           (a.type ? '<div class="bottom"><span class="tpills">' + typePills(a.type) + '</span></div>' : '') + '</button>';
       }).join('');
     }
@@ -958,10 +961,14 @@
     return p.join(' · ') || 'No amounts';
   }
   function agentRow(r) {
-    var effect = '';
+    var to = num(r.toAgent), from = num(r.fromAgent), amt = '';
+    if (to && !from) amt = '<span class="amount">' + money(to) + '</span>';
+    else if (from && !to) amt = '<span class="amount c-credit">+' + money(from) + '</span>';
+    var parts = [];
+    if (to) parts.push('Paid ' + money(to)); if (from) parts.push('Received ' + money(from));
     return '<button class="row" data-act="editAgent" data-id="' + esc(r.id) + '"><div class="top"><div><div class="name">' + esc(r.name || 'No name') + '</div>' +
-      '<div class="detail">' + esc(r.desc || r.txType || 'Entry') + (r.time ? ' · ' + esc(r.time) : '') + (r.txNumber ? ' · Received on ' + esc(phoneLine(r.txNumber)) : '') + ' · ' + esc(r.refId) + '</div></div>' + effect + '</div>' +
-      '<div class="bottom"><span class="num">' + esc(paidRecv(r)) + '</span></div></button>';
+      '<div class="detail">' + esc(r.txType || r.desc || 'Agent') + (r.time ? ' · ' + esc(r.time) : '') + '</div></div>' + amt + '</div>' +
+      '<div class="bottom"><span class="state">' + esc(parts.join(' · ') || '—') + '</span>' + (r.txNumber ? '<span class="c-muted">→ ' + esc(phoneLine(r.txNumber)) + '</span>' : '') + '</div></button>';
   }
   VIEWS.agent = function (v) {
     var a = findAgent(v.key);
@@ -971,7 +978,6 @@
       '<div>' + agentNetText(a.net, true) + '</div><div class="stats"><div><span>Entries</span><b>' + a.entries + '</b></div><div><span>Last Entry</span><b>' + esc(shortDate(a.last)) + '</b></div>' +
       '<div><span>Written Off</span><b>' + money(a.writtenOff) + '</b></div></div>' +
       '<div class="actions"><button class="btn primary" data-act="shareFor" data-type="Agent" data-key="' + esc(a.key) + '">Send Reminder</button></div></div>' +
-      '<p class="hint">"Paid to Agent" is money or float you sent to them. "Received from Agent" is money they sent to you. "To Collect" means they must pay you; "To Pay" means you must pay them.</p>' +
       rows.map(agentRow).join('');
   };
 
@@ -1259,14 +1265,12 @@
     var h = seg('commTab', UI.commTab, [['wallet', 'Mobile Wallets'], ['evc', 'EVC'], ['month', 'By Month']]);
     if (UI.commTab === 'wallet') {
       var rows = R.walletComm.slice().sort(function (a, b) { return (b.month || '').localeCompare(a.month || '') || (b.seq || 0) - (a.seq || 0); });
-      h += '<p class="hint">One entry per wallet per month. Net is what you received, minus anything you shared with an Agent or Partner.</p>';
       h += rows.length ? rows.map(function (r) {
         return '<button class="row" data-act="editWallet" data-id="' + esc(r.id) + '"><div class="top"><div><div class="name">' + esc(r.wallet || 'No wallet') + '</div><div class="detail">' + esc(monthName(r.month)) + '</div></div><span class="amount c-credit">' + money(r.net) + '</span></div>' +
           '<div class="bottom"><span class="c-muted num">Statement ' + money(num(r.earned)) + ', received ' + money(num(r.received)) + (num(r.shared) ? ', shared with Agent or Partner ' + money(r.shared) + (r.agentName ? ' (' + esc(r.agentName) + ')' : '') : '') + '</span></div></button>';
       }).join('') : empty('No wallet commissions yet', 'Tap the green button to add one.');
     } else if (UI.commTab === 'evc') {
       var ev = R.evc.slice().sort(function (a, b) { return (b.month || '').localeCompare(a.month || '') || (b.seq || 0) - (a.seq || 0); });
-      h += '<p class="hint">One row per purchase. You earn commission on the part you sell to customers (Retail). The part you sell on to other dealers (Wholesale) is passed on to them. If you share part of your commission with a partner or line owner, enter it in the form and it is taken off for you.</p>';
       h += ev.length ? ev.map(function (r) {
         return '<button class="row" data-act="editEvc" data-id="' + esc(r.id) + '"><div class="top"><div><div class="name">' + esc(r.provider || 'EVC') + '</div><div class="detail">' + esc(monthName(r.month)) + (r.wholesaler ? ', wholesale to ' + esc(r.wholesaler) : '') + '</div></div><span class="amount c-credit">' + money(r.net) + '</span></div>' +
           '<div class="bottom"><span class="c-muted num">Bought ' + money(num(r.purchase)) + ' (retail ' + money(r.retail) + ', wholesale ' + money(num(r.wholesale)) + '). You keep ' + money(r.net) + ', shared with partner ' + money(r.royalty) + (num(r.wholesale) ? ', passed to dealer ' + money(r.toWholesaler) : '') + '</span></div></button>';
@@ -1284,14 +1288,12 @@
     var h = seg('refTab', UI.refTab, [['sales', 'Sales'], ['payouts', 'What to Pay'], ['rates', 'Deposit Rates']]);
     var RF = R.referrals;
     if (UI.refTab === 'sales') {
-      h += '<p class="hint">For Data Sending and EVC, log one row per agent per day with that day\'s total. Log each Deposit on its own, because its commission depends on the amount.</p>';
       var rows = RF.rows.slice().sort(byNewest);
       h += rows.length ? rows.map(function (r) {
         return '<button class="row" data-act="editRef" data-id="' + esc(r.id) + '"><div class="top"><div><div class="name">' + esc(r.agent || 'No agent') + '</div><div class="detail">' + esc(shortDate(r.date)) + ', ' + esc(r.service || '') + (r.client ? ', ' + esc(r.client) : '') + ', ' + esc(r.refId) + '</div></div><span class="amount">' + money(num(r.amount)) + '</span></div>' +
           '<div class="bottom"><span class="c-muted num">Commission ' + money(r.commission) + ', their cut ' + money(r.agentCut) + '</span><span class="amount c-credit">' + money(r.net) + '</span></div></button>';
       }).join('') : empty('No referral sales yet', 'Tap the green button to add one.');
     } else if (UI.refTab === 'payouts') {
-      h += '<p class="hint">Worked out automatically from the sales, per agent per month.</p>';
       h += RF.payouts.length ? RF.payouts.map(function (p) {
         return '<div class="card"><b>' + esc(p.agent || 'No agent') + '</b><div class="hint" style="margin:0">' + esc(monthName(p.month)) + '</div>' +
           kv('Total commission', money(p.commission)) + kv('Pay the agent', '<span class="c-owed">' + money(p.agentCut) + '</span>') + kv('You keep', '<span class="c-credit">' + money(p.net) + '</span>') + '</div>';
@@ -1318,8 +1320,8 @@
       '<div class="figure wide"><div class="label">Working Capital' + (latest ? ', from ' + esc(shortDate(latest.date)) : '') + '</div><div class="big ' + (latest && latest.working < 0 ? 'c-late' : 'c-credit') + '">' + (latest ? money(latest.working) : 'Not recorded') + '</div>' +
       '<div class="sub">Available capital, plus money to collect, minus money to pay</div></div>' +
       '<div class="figure"><div class="label">Available Capital</div><div class="big">' + (latest ? money(latest.available) : '—') + '</div></div>' +
-      '<div class="figure"><div class="label">To Collect</div><div class="big c-owed">' + money(cap.receivables) + '</div><div class="sub">From customers and agents</div></div>' +
-      '<div class="figure wide"><div class="label">To Pay</div><div class="big">' + money(cap.payables) + '</div><div class="sub">To agents, plus what customers paid in advance</div></div></div>';
+      '<div class="figure"><div class="label">Owed to Us</div><div class="big c-owed">' + money(cap.receivables) + '</div><div class="sub">Customers and agents</div></div>' +
+      '<div class="figure wide"><div class="label">We Owe</div><div class="big">' + money(cap.payables) + '</div><div class="sub">Agents and advances</div></div></div>';
     h += '<div class="section-title">Your Recorded Balances</div>';
     h += cap.rows.length ? cap.rows.map(function (s) {
       return '<button class="row" data-act="openCheck" data-id="' + esc(s.id) + '"><div class="top"><div class="name">' + esc(readable(s.date)) + (s.time ? ' · ' + esc(s.time) : '') + '</div><span class="amount">' + money(s.available) + '</span></div>' +
@@ -1384,7 +1386,7 @@
       '<h3>Paying an old debt late</h3><p>Open the old sale and tap "Record a payment", or put the full amount on the new sale. A payment covers its own sale first, and anything extra pays off the oldest unpaid sales. Either way the old sale turns Paid and the app records how many days late it was paid.</p>' +
       '<h3>Statuses</h3><p>Paid: settled. Overpaid: in credit. Outstanding: unpaid for up to 3 days. Overdue: unpaid for more than 3 days. Bad debt: written off.</p>' +
       '<h3>Customer types</h3><p>Regular: 3 or more sales and at least one a month. Irregular: fewer. Inactive: no sale for 90 days. Bad (high risk): oldest unpaid sale is over 60 days old. Do not give credit: something was written off.</p>' +
-      '<h3>Agents</h3><p>"Paid to Agent" is money or float you sent to the agent. "Received from Agent" is what they sent you. If you paid more than you received, it shows as To Collect. If you received more, it shows as To Pay.</p>' +
+      '<h3>Agents</h3><p>"Paid to Agent" is money or float you sent to the agent. "Received from Agent" is what they sent you. If you paid more than you received, it shows as Owes Us. If you received more, it shows as We Owe.</p>' +
       '<h3>EVC</h3><p>Commission = purchase x operator rate. Shared with Partner = retail part x your partner\'s retail share, plus wholesale part x their wholesale share. On the wholesale part, the rest goes to the dealer.</p>' +
       '<h3>Your data</h3><p>Everything stays on this phone and works without internet. Back it up every week from Settings, then Backup and Restore.</p></div>';
   };
@@ -1564,7 +1566,7 @@
     h += '<div class="section-title">Customers</div>';
     h += list.length ? list.map(function (c) {
       return '<div class="card"><div class="top" style="display:flex;justify-content:space-between;gap:10px"><div><b>' + esc(c.name || c.phone) + '</b><div class="hint" style="margin:0">' + esc(limitText(c)) + '</div></div>' +
-        '<div style="text-align:right">' + pill(c.level + ' risk', RISK_PILL[c.level]) + '<div class="amount c-owed" style="margin-top:4px">' + (c.owed > 0 ? 'To collect ' + money(c.owed) : '') + '</div></div></div>' +
+        '<div style="text-align:right">' + pill(c.level + ' risk', RISK_PILL[c.level]) + '<div class="amount c-owed" style="margin-top:4px">' + (c.owed > 0 ? 'Owes ' + money(c.owed) : '') + '</div></div></div>' +
         (c.over ? '<div class="form-error" style="margin:8px 0 0">Over the credit limit by ' + money(c.owed - c.limit) + '</div>' : '') +
         (c.reasons.length ? '<ul class="reasons">' + c.reasons.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '') +
         '<div class="actions" style="margin-bottom:0">' + (c.owed > 0 ? '<button class="btn kiosk" data-act="shareFor" data-type="Customer" data-key="' + esc(c.key) + '">Send reminder</button>' : '') +
@@ -1573,7 +1575,7 @@
     if (rk.agents.length) {
       h += '<div class="section-title">Agents with money to pay you</div>' + rk.agents.map(function (a) {
         return '<div class="card"><div style="display:flex;justify-content:space-between;gap:10px"><b>' + esc(a.name) + '</b>' + pill(a.level + ' risk', RISK_PILL[a.level]) + '</div>' +
-          kv('To collect', money(a.net)) + (a.reasons.length ? '<ul class="reasons">' + a.reasons.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '') + '</div>';
+          kv('Owes us', money(a.net)) + (a.reasons.length ? '<ul class="reasons">' + a.reasons.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '') + '</div>';
       }).join('');
     }
     h += '<div class="card help"><h3 style="margin-top:0">How the risk score works</h3><p>Points are added for: money unpaid for a long time, owing much more than their usual purchase, paying late before, and past write-offs. 60 points or more is High risk, 30 or more is Medium.</p>' +
@@ -1607,32 +1609,32 @@
   var SCHEMAS = {
     sale: { title: ['New Sale', 'Edit Sale'], coll: 'sales', prefix: function (v) { return v.kind === 'WE' ? 'WE' : 'DS'; }, fields: [
       { k: 'kind', t: 'seg', opts: [['DS', 'Data / Deposit'], ['WE', 'Wallet Exchange']] },
-      { k: 'date', t: 'pickdate', label: 'Date of This Sale', req: 1 },
-      { k: 'time', t: 'time', label: 'Time (Optional)' },
-      { k: 'phone', t: 'tel', label: 'Customer WhatsApp / Phone', list: 'custPhones' },
-      { k: 'name', t: 'text', label: 'Customer Name', req: 1, list: 'custNames' },
+      { k: 'date', t: 'pickdate', label: 'Date', req: 1 },
+      { k: 'time', t: 'time', label: 'Time' },
+      { k: 'phone', t: 'tel', label: 'Phone', list: 'custPhones' },
+      { k: 'name', t: 'text', label: 'Name', req: 1, list: 'custNames' },
       { k: 'exType', t: 'select', label: 'Exchange Type', opts: 'exTypes', show: isWE },
-      { k: 'details', t: 'text', label: 'Bundle, Deposit or Details' },
+      { k: 'details', t: 'text', label: 'Details' },
       { k: 'billed', t: 'num', label: 'Amount', req: 1 },
-      { k: 'costOut', t: 'num', label: 'Amount You Sent Out (Optional)', note: 'What you paid out to the customer. It keeps your balance checks accurate.', show: isWE },
-      { k: 'payMode', t: 'paymode', label: 'How Was It Paid?', req: 1 },
-      { k: 'received', t: 'num', label: 'Amount Received So Far', req: isPart, show: isPart },
+      { k: 'costOut', t: 'num', label: 'Sent Out', show: isWE },
+      { k: 'payMode', t: 'paymode', label: 'Payment', req: 1 },
+      { k: 'received', t: 'num', label: 'Received So Far', req: isPart, show: isPart },
       { k: 'channel', t: 'selectother', label: 'Paid Through', opts: 'channels', req: isPaid, show: isPaid },
       { k: 'bank', t: 'selectother', label: bankLabel, opts: 'banks', show: function (v) { return isPaid(v) && viaBank(v); } },
-      { k: 'costDs', t: 'num', label: 'What the Data or Airtime Cost You (Optional)', note: 'Used in your balance checks.', more: 1, show: notWE },
+      { k: 'costDs', t: 'num', label: 'Your Cost', more: 1, show: notWE },
       { k: 'tip', t: 'num', label: tipLabel, more: 1 },
-      { k: 'beneficiary', t: 'tel', label: 'Number That Received the Data or Money (If Different)', more: 1 },
-      { k: 'datePaid', t: 'date', label: 'Date Paid, Only If Paid Later', note: 'Saves how many days late they paid.', more: 1 },
-      { k: 'writtenOff', t: 'num', label: woLabel, note: 'Only if you will never collect it.', more: 1 },
+      { k: 'beneficiary', t: 'tel', label: 'Receiving Number', more: 1 },
+      { k: 'datePaid', t: 'date', label: 'Date Paid', more: 1 },
+      { k: 'writtenOff', t: 'num', label: woLabel, more: 1 },
       { k: 'woReason', t: 'select', label: 'Reason for Write-Off', opts: 'woReasons', show: function (v) { return num(v.writtenOff) > 0; }, more: 1 },
       { k: 'notes', t: 'area', label: 'Notes', more: 1 }],
       defaults: function () { return { kind: 'DS', date: '', payMode: S.settings.payDefault || '', channel: '' }; },
       keep: ['kind', 'date'], info: saleInfo },
-    payment: { title: ['Customer Paid', 'Edit Payment'], coll: 'sales', prefix: function () { return 'PY'; }, fields: [
-      { k: 'date', t: 'pickdate', label: 'Date They Paid', req: 1 },
-      { k: 'time', t: 'time', label: 'Time (Optional)' },
-      { k: 'phone', t: 'tel', label: 'Customer WhatsApp / Phone', list: 'custPhones' },
-      { k: 'name', t: 'text', label: 'Customer Name', req: 1, list: 'custNames' },
+    payment: { title: ['Debt Payment', 'Edit Debt Payment'], coll: 'sales', prefix: function () { return 'PY'; }, fields: [
+      { k: 'date', t: 'pickdate', label: 'Date', req: 1 },
+      { k: 'time', t: 'time', label: 'Time' },
+      { k: 'phone', t: 'tel', label: 'Phone', list: 'custPhones' },
+      { k: 'name', t: 'text', label: 'Name', req: 1, list: 'custNames' },
       { k: 'received', t: 'num', label: 'Amount Paid', req: 1 },
       { k: 'channel', t: 'selectother', label: 'Paid Through', opts: 'channels', req: 1 },
       { k: 'bank', t: 'selectother', label: bankLabel, opts: 'banks', show: viaBank },
@@ -1642,8 +1644,8 @@
       keep: ['date'], info: paymentInfo,
       check: function (v, errs) { if (!(num(v.received) > 0)) errs.push('Type the amount they paid.'); } },
     agent: { title: ['New Agent Entry', 'Edit Agent Entry'], coll: 'agents', prefix: function () { return 'AL'; }, fields: [
-      { k: 'date', t: 'pickdate', label: 'Date of This Entry', req: 1 },
-      { k: 'time', t: 'time', label: 'Time (Optional)' },
+      { k: 'date', t: 'pickdate', label: 'Date', req: 1 },
+      { k: 'time', t: 'time', label: 'Time' },
       { k: 'name', t: 'text', label: 'Agent Name', req: 1, list: 'agentNames' },
       { k: 'phone', t: 'tel', label: 'Agent Phone', list: 'agentPhones' },
       { k: 'type', t: 'multi', label: 'Agent Type', opts: AGENT_TYPES },
@@ -1659,8 +1661,8 @@
       keep: ['date'], info: agentInfo,
       check: function (v, errs) { if (!C.has(v.toAgent) && !C.has(v.fromAgent) && !(num(v.writtenOff) > 0)) errs.push('Type the amount you paid to the agent, or received from the agent.'); } },
     referral: { title: ['New Referral Sale', 'Edit Referral Sale'], coll: 'referrals', prefix: function () { return 'RA'; }, fields: [
-      { k: 'date', t: 'pickdate', label: 'Date of This Sale', req: 1 },
-      { k: 'time', t: 'time', label: 'Time (Optional)' },
+      { k: 'date', t: 'pickdate', label: 'Date', req: 1 },
+      { k: 'time', t: 'time', label: 'Time' },
       { k: 'agent', t: 'text', label: 'Referring Agent', req: 1, list: 'refAgents' },
       { k: 'service', t: 'select', label: 'Service', opts: ['Data Sending', 'Deposit', 'EVC'], req: 1 },
       { k: 'amount', t: 'num', label: 'Amount (or the Day\'s Total)', req: 1 },
@@ -1678,7 +1680,7 @@
       { k: 'earned', t: 'num', label: 'Commission on Statement', half: 1 },
       { k: 'received', t: 'num', label: 'Commission Paid to You', half: 1 },
       { k: 'shared', t: 'num', label: 'Shared with an Agent or Partner' },
-      { k: 'agentName', t: 'text', label: 'Agent or Partner Name', list: 'agentNames', note: 'Type any name. New agents are welcome.' },
+      { k: 'agentName', t: 'text', label: 'Agent or Partner Name', list: 'agentNames' },
       { k: 'agentPhone', t: 'tel', label: 'Agent or Partner Phone', list: 'agentPhones' },
       { k: 'notes', t: 'area', label: 'Notes', more: 1 }],
       defaults: function () { return { month: R.today.slice(0, 7) }; },
@@ -1687,11 +1689,11 @@
       { k: 'month', t: 'month', label: 'Month', req: 1 },
       { k: 'provider', t: 'selectother', label: 'EVC Operator', opts: 'evcProviders', req: 1 },
       { k: 'purchase', t: 'num', label: 'Purchase Amount', req: 1, half: 1 },
-      { k: 'wholesale', t: 'num', label: 'Part Sold to Other Dealers', half: 1, note: 'Wholesale. Leave empty if you sold it all to customers.' },
+      { k: 'wholesale', t: 'num', label: 'Sold to Dealers', half: 1 },
       { k: 'wholesaler', t: 'text', label: 'Dealer Name', list: 'agentNames', show: function (v) { return num(v.wholesale) > 0; } },
-      { k: 'rate', t: 'num', label: 'Operator Commission Rate (%)', note: 'The percentage the operator gives you on what you buy.' },
-      { k: 'retailRoy', t: 'num', label: 'Share Paid to Partner on Retail Sales (%)', note: 'Only if you share part of your commission with a partner or line owner. Otherwise leave it at 0.', more: 1 },
-      { k: 'wholesaleRoy', t: 'num', label: 'Share Paid to Partner on Wholesale (%)', more: 1 },
+      { k: 'rate', t: 'num', label: 'Commission Rate (%)' },
+      { k: 'retailRoy', t: 'num', label: 'Partner Share, Retail (%)', more: 1 },
+      { k: 'wholesaleRoy', t: 'num', label: 'Partner Share, Wholesale (%)', more: 1 },
       { k: 'notes', t: 'area', label: 'Notes', more: 1 }],
       defaults: function () {
         var last = lastEvcFor(''), d = { month: R.today.slice(0, 7), provider: '' };
@@ -1704,7 +1706,7 @@
       } },
     expense: { title: ['Money Out', 'Edit Money Out'], coll: 'expenses', prefix: function () { return 'EX'; }, fields: [
       { k: 'date', t: 'pickdate', label: 'Date It Was Paid', req: 1 },
-      { k: 'time', t: 'time', label: 'Time (Optional)' },
+      { k: 'time', t: 'time', label: 'Time' },
       { k: 'category', t: 'selectother', label: 'What Was It For?', opts: 'expenseCats', req: 1 },
       { k: 'amount', t: 'num', label: 'Amount', req: 1 },
       { k: 'paidFrom', t: 'select', label: 'Paid From', opts: 'capitalAccounts' },
@@ -1743,14 +1745,14 @@
   function paymentInfo(v) {
     if (!(v.phone || v.name)) return '';
     var c = findCustomer(C.custKey(v));
-    if (!c) return '<div class="form-info">New customer: this payment is recorded as credit they can use later.</div>';
+    if (!c) return '<div class="form-info">This customer owes nothing. The money is kept as paid ahead.</div>';
     var applied = Math.max(0, num(v.received) - (S.settings.tipMode === 'included' ? num(v.tip) : 0)), after = r2(c.balance - applied);
-    return calcBox([['Still to Pay Now', c.balance > 0 ? money(c.balance) : c.balance < 0 ? 'Nothing (credit ' + money(-c.balance) + ')' : 'Nothing'],
-      ['After This Payment', after > 0 ? 'Still to pay ' + money(after) : after < 0 ? 'Credit ' + money(-after) : 'Settled']]);
+    return calcBox([['Owes Now', c.balance > 0 ? money(c.balance) : c.balance < 0 ? 'Nothing, paid ahead ' + money(-c.balance) : 'Nothing'],
+      ['After This', after > 0 ? 'Still owes ' + money(after) : after < 0 ? 'Paid ahead ' + money(-after) : 'Fully paid']]);
   }
   function agentInfo(v) {
     var n = r2(num(v.toAgent) - num(v.fromAgent) - num(v.writtenOff)), h = '';
-    if (C.has(v.toAgent) || C.has(v.fromAgent)) h += calcBox([['This Entry', n > 0 ? 'To collect ' + money(n) : n < 0 ? 'To pay ' + money(-n) : 'Even']]);
+    if (C.has(v.toAgent) || C.has(v.fromAgent)) h += calcBox([['This Entry', n > 0 ? 'Agent owes us ' + money(n) : n < 0 ? 'We owe the agent ' + money(-n) : 'Even']]);
     var a = v.name ? findAgent(C.agentKey(v.name)) : null;
     if (a && FORM && FORM.isNew) {
       var after = r2(a.net + n);
@@ -1785,13 +1787,13 @@
       return '<div class="field datefield" data-field="' + f.k + '"><label for="' + id + '">' + esc(text) + ' *</label><div class="datechips">' +
         chip('today', 'Today', dayShort(R.today)) + chip('yesterday', 'Yesterday', dayShort(yd)) + chip('other', 'Other Date', which === 'other' ? dayShort(v) : 'Pick') +
         '</div><input id="' + id + '" name="' + f.k + '" type="date" value="' + esc(v) + '" class="' + (which === 'other' ? '' : 'hide-date') + '">' +
-        (which ? '' : '<div class="note datenote">Tap the date of this transaction.</div>') + '</div>';
+        '' + '</div>';
     }
     if (f.t === 'paymode') {
       var modes = [['full', 'Paid in Full', 'Money received'], ['part', 'Part Paid', 'Some received'], ['credit', 'On Credit', 'Nothing yet']];
       return '<div class="field" data-field="' + f.k + '"><label>' + esc(text) + ' *</label><div class="paychips">' + modes.map(function (m) {
         return '<button type="button" class="pchip ' + m[0] + (v === m[0] ? ' on' : '') + '" data-act="payMode" data-v="' + m[0] + '"><b>' + m[1] + '</b><small>' + m[2] + '</small></button>';
-      }).join('') + '</div><input type="hidden" name="' + f.k + '" value="' + esc(v) + '">' + (v ? '' : '<div class="note datenote">Tap how this sale was paid.</div>') + '</div>';
+      }).join('') + '</div><input type="hidden" name="' + f.k + '" value="' + esc(v) + '">' + '' + '</div>';
     }
     if (f.t === 'multi') {
       return '<div class="field' + hide + '" data-field="' + f.k + '">' + lab + multiHTML(f.k, f.opts, v) + '</div>';
@@ -1901,7 +1903,7 @@
     document.body.appendChild(el);
     UI.sheetOpen = true; document.body.style.overflow = 'hidden'; UI.draftDone = false;
     history.pushState({ sheet: 1 }, '');
-    setTimeout(function () { enhancePickers(el); enhanceQuick(el); }, 0);
+    setTimeout(function () { enhancePickers(el); enhanceQuick(el); foldHints(el); }, 0);
   }
   function removeSheet() {
     var el = document.getElementById('sheetwrap'); if (el) el.remove();
@@ -1992,7 +1994,7 @@
   function buildCapital(rec, vals) {
     var accounts = S.settings.capitalAccounts.slice();
     if (rec) Object.keys(rec.balances || {}).forEach(function (k) { if (accounts.indexOf(k) < 0) accounts.push(k); });
-    var fields = [{ k: 'date', t: 'pickdate', label: 'Date of These Balances', req: 1 }, { k: 'time', t: 'time', label: 'Time (Optional)' }]
+    var fields = [{ k: 'date', t: 'pickdate', label: 'Date of These Balances', req: 1 }, { k: 'time', t: 'time', label: 'Time' }]
       .concat(accounts.map(function (a, i) { return { k: 'b' + i, t: 'num', label: a, half: 1, acct: a }; }))
       .concat([{ k: 'notes', t: 'area', label: 'Notes' }]);
     function balancesOf(v) { var b = {}; fields.forEach(function (f) { if (f.acct) b[f.acct] = v[f.k]; }); return b; }
@@ -2054,13 +2056,13 @@
   }
   function saleBatchRow(i) {
     return '<div class="batch-row"><div class="batch-head"><b>Sale ' + (i + 1) + '</b><button type="button" class="linkbtn" data-act="batchRemove">Remove</button></div>' + dateTimeRow() +
-      '<div class="field"><label>Customer Phone</label><div class="telrow"><select class="ccsel b-cc" aria-label="Country of this number">' + ccOptions(S.settings.profile.country) + '</select>' +
+      '<div class="field"><label>Phone</label><div class="telrow"><select class="ccsel b-cc" aria-label="Country of this number">' + ccOptions(S.settings.profile.country) + '</select>' +
       '<input type="tel" inputmode="tel" class="b-phone" aria-label="Customer phone" data-suggest="cust" autocomplete="off"></div><div class="netline"></div></div>' +
-      '<div class="field"><label>Customer Name</label><input type="text" class="b-name" aria-label="Customer name" data-suggest="cust" autocomplete="off"></div>' +
-      '<div class="field"><label>Bundle, Deposit or Details</label><input type="text" class="b-details" aria-label="Details"></div>' +
+      '<div class="field"><label>Name</label><input type="text" class="b-name" aria-label="Customer name" data-suggest="cust" autocomplete="off"></div>' +
+      '<div class="field"><label>Details</label><input type="text" class="b-details" aria-label="Details"></div>' +
       '<div class="two"><div class="field"><label>Amount</label><input type="number" step="any" inputmode="decimal" class="b-amount" aria-label="Amount"></div>' +
-      '<div class="field"><label>How Was It Paid?</label><select class="b-pay" aria-label="How was it paid">' + payOptions(S.settings.payDefault || '') + '</select></div></div>' +
-      '<div class="field b-recv-wrap hide"><label>Amount Received So Far</label><input type="number" step="any" inputmode="decimal" class="b-received" aria-label="Amount received so far"></div>' +
+      '<div class="field"><label>Payment</label><select class="b-pay" aria-label="How was it paid">' + payOptions(S.settings.payDefault || '') + '</select></div></div>' +
+      '<div class="field b-recv-wrap hide"><label>Received So Far</label><input type="number" step="any" inputmode="decimal" class="b-received" aria-label="Amount received so far"></div>' +
       '<div class="field"><label>Paid Through</label><select class="b-channel" data-pick="1" aria-label="Paid through">' + chanOptions('Same as above') + '</select></div></div>';
   }
   function agentBatchRow(i) {
@@ -2082,12 +2084,11 @@
     UI.draftId = null;
     UI.batchMode = mode === 'agent' ? 'agent' : 'sale'; UI.batchDate = ''; UI.batchKind = 'DS';
     var isAgent = UI.batchMode === 'agent', top = '<div id="batch-top">' + (isAgent ? '' : seg('batchKind', 'DS', [['DS', 'Data / Deposit'], ['WE', 'Wallet Exchange']])) +
-      fieldHTML({ k: 'bdate', t: 'pickdate', label: isAgent ? 'Date for These Entries' : 'Date for These Sales' }, {}) +
+      fieldHTML({ k: 'bdate', t: 'pickdate', label: 'Date for All Rows' }, {}) +
       (isAgent ? '' : '<div class="field"><label for="b-chan">Paid Through, for All Rows</label><select id="b-chan" data-pick="1">' + chanOptions('Choose', '') + '<option value="__other">Other (type your own)…</option></select>' +
         '<input class="otherbox hide" id="b-chan-other" placeholder="Type it here" aria-label="Other, type your own" autocomplete="off"></div>' +
         '<div class="field hide" id="b-ex-wrap"><label for="b-ex">Exchange Type, for All Rows</label><select id="b-ex"><option value="">Choose</option>' + opts('exTypes').map(function (x) { return '<option>' + esc(x) + '</option>'; }).join('') + '</select></div>') + '</div>';
-    var body = '<p class="hint" style="margin-top:0">Type several ' + (isAgent ? 'entries' : 'sales') + ', then save them all at once. The date you choose goes on every row, and you can still change any row\'s date.</p>' +
-      '<div id="form-error"></div>' + top + '<div id="batch-rows">' + batchRowHTML(0) + batchRowHTML(1) + batchRowHTML(2) + '</div>' +
+    var body =       '<div id="form-error"></div>' + top + '<div id="batch-rows">' + batchRowHTML(0) + batchRowHTML(1) + batchRowHTML(2) + '</div>' +
       '<button class="btn block" data-act="batchAdd">Add Another Row</button>' + datalists();
     var foot = '<button class="btn primary" data-act="batchSave">Save All</button>', title = isAgent ? 'Several Agent Entries at Once' : 'Several Sales at Once';
     if (UI.sheetOpen) {
@@ -2464,6 +2465,7 @@
     draftsOpen: function () { openDrafts(); },
     draftOpen: function (d) { var x = draftsGet().filter(function (y) { return y.id === d.id; })[0]; UI.draftDone = true; if (UI.sheetOpen) removeSheet(); if (x) setTimeout(function () { resumeDraft(x); }, 30); },
     draftDelete: function (d) { draftDrop(d.id); if (draftsGet().length) openDrafts(); else { UI.draftDone = true; closeSheet(); render(); } },
+    moreTools: function () { UI.moreTools = !UI.moreTools; render(); },
     repTab: function (d) { UI.repTab = d.v; render(); window.scrollTo(0, 0); },
     agentType: function (d) { UI.agentType = d.v; UI.limit = 120; render(); },
     multiPick: function (d, el) {
@@ -2608,6 +2610,19 @@
   }
 
   /* ================= Events ================= */
+  /* Long explanations are folded behind a small "More info" so screens stay short. */
+  function foldHints(root) {
+    var list = (root || document).querySelectorAll('p.hint:not(.folded)');
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i];
+      if (p.closest('.banner, .capcard, #pickerwrap, details.tip, .form-error')) continue;
+      if (p.textContent.trim().length < 95) continue;
+      p.classList.add('folded');
+      var d = document.createElement('details'); d.className = 'tip';
+      d.innerHTML = '<summary>' + icon('help') + '<span>More info</span></summary>';
+      p.parentNode.insertBefore(d, p); d.appendChild(p);
+    }
+  }
   var ROW_ICON = { editExpense: 'expense', editError: 'loss', openCheck: 'cash', editWallet: 'comm', editEvc: 'comm' };
   function decorateRows() {
     var rows = document.querySelectorAll('.row:not(.has-av)');

@@ -723,3 +723,28 @@ select.picked { display: none; }
 .pill.p-refer { background: #F1EBFF; color: #6D28D9; }
 .pill.p-evc { background: #FFF0E2; color: #C2410C; }
 .tchips { margin-bottom: 10px; }
+
+/* ===== Version 22: calmer, shorter screens ===== */
+.shortcuts { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.sc .ic { width: 58px; height: 58px; border-radius: 19px; }
+.sc .ic svg { width: 29px; height: 29px; }
+.sc { font-size: .8rem; }
+.tool .ic.c-gray { background: #EEF0F4; color: #475467; }
+.tool .ic.c-green { background: var(--c-green-bg); color: var(--c-green); }
+details.tip { margin: 4px 0 12px; }
+details.tip > summary { list-style: none; display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: .84rem; font-weight: 600; cursor: pointer; padding: 4px 0; }
+details.tip > summary::-webkit-details-marker { display: none; }
+details.tip > summary svg { width: 17px; height: 17px; }
+details.tip[open] > summary { color: var(--blue); }
+details.tip > p.hint { margin: 6px 0 0; padding: 10px 12px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+.owed .lab { font-weight: 700; color: var(--ink-soft); }
+/* Compact rows */
+.row .bottom { align-items: center; margin-top: 6px; }
+.state { font-size: .84rem; font-weight: 700; color: var(--ink-soft); }
+.state.owe { color: var(--red); }
+.state.ahead { color: var(--green); }
+.state.ok { color: var(--green); }
+.via { display: inline-flex; align-items: center; gap: 5px; font-size: .8rem; font-weight: 600; color: var(--muted); }
+.row .amount { font-size: 1.05rem; }
+/* The short message sits above the Undo bar instead of on top of it */
+.toast { bottom: calc(var(--nav-h, 64px) + 150px) !important; }

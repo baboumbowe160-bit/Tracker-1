@@ -1011,3 +1011,21 @@ I18N.add('pt', {
 }, [
   [/^(\d+) drafts?$/, "$1 rascunho(s)"], [/^(\d+) write-offs?, last (.+)$/, "$1 perda(s), última a $2"], [/^1 person$/, "1 pessoa"], [/^(\d+) people$/, "$1 pessoas"], [/^(\d+) rows$/, "$1 linhas"]
 ]);
+I18N.add('pt', {
+  "Date": "Data", "Time": "Hora", "Phone": "Telefone", "Name": "Nome", "Details": "Detalhes", "Sent Out": "Enviado", "Payment": "Pagamento",
+  "Received So Far": "Recebido até agora", "Your Cost": "O seu custo", "Date Paid": "Data do pagamento", "Date for All Rows": "Data para todas as linhas",
+  "Debt Payment": "Pagamento de dívida", "Edit Debt Payment": "Editar pagamento de dívida", "Debt Paid": "Dívida paga",
+  "Owed to Us": "Devem-nos", "We Owe": "Devemos", "Agents and advances": "Agentes e adiantamentos", "Customers Owe Us": "Os clientes devem-nos",
+  "Owing": "Em dívida", "Paid Ahead": "Pago adiantado", "Owes Now": "Deve agora", "After This": "Depois disto", "Fully paid": "Tudo pago", "Paid": "Pago",
+  "More info": "Mais info", "More": "Mais", "Less": "Menos", "Owes us": "Deve-nos", "Agent": "Agente",
+  "No entries yet. Tap New Sale to start.": "Ainda sem registos. Toque em Nova venda para começar.",
+  "This customer owes nothing. The money is kept as paid ahead.": "Este cliente não deve nada. O dinheiro fica como pago adiantado.",
+  "Customers and agents": "Clientes e agentes", "Sold to Dealers": "Vendido a revendedores", "Commission Rate (%)": "Taxa de comissão (%)",
+  "Partner Share, Retail (%)": "Parte do parceiro, retalho (%)", "Partner Share, Wholesale (%)": "Parte do parceiro, grosso (%)", "1 entry": "1 registo"
+}, [
+  [/^Owes Us (.+)$/, "Deve-nos $1"], [/^Owes (.+)$/, "Deve $1"], [/^We Owe (.+)$/, "Devemos $1"], [/^Paid Ahead (.+)$/, "Pago adiantado $1"],
+  [/^Still owes (.+)$/, "Ainda deve $1"], [/^Nothing, paid ahead (.+)$/, "Nada, pago adiantado $1"], [/^Agent owes us (.+)$/, "O agente deve-nos $1"],
+  [/^We owe the agent (.+)$/, "Devemos $1 ao agente"], [/^Paid (.+)$/, "Pago $1"], [/^Received (.+)$/, "Recebido $1"], [/^Overdue$/, "Em atraso"],
+  [/^(\d+) days$/, "$1 dias"], [/^(\d+) entries$/, "$1 registos"],
+  [/^(\d+) customers? · owing (.+) · paid ahead (.+)$/, "$1 cliente(s) · em dívida $2 · pago adiantado $3"]
+]);
