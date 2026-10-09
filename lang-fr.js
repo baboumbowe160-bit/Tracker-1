@@ -998,3 +998,16 @@ I18N.add('fr', {
   [/^(\d+) messages? to record$/, "$1 message(s) à enregistrer"], [/^Messages to Record \((\d+)\)$/, "Messages à enregistrer ($1)"],
   [/^(.+) is paying what they owe$/, "$1 paie ce qu'il doit"], [/^owes (.+)$/, "doit $1"]
 ]);
+I18N.add('fr', {
+  "Agent Phone": "Téléphone de l'agent", "Receiving Number": "Numéro qui a reçu", "Description (Optional)": "Description (facultatif)",
+  "Assistant": "Assistant", "Master": "Principal", "Referral": "Apporteur", "Assistant Agent": "Agent assistant", "Referral Agent": "Agent apporteur", "EVC Agent": "Agent EVC",
+  "Agent or Partner Phone": "Téléphone de l'agent ou du partenaire", "Type any name. New agents are welcome.": "Tapez n'importe quel nom. Les nouveaux agents sont acceptés.",
+  "Overview": "Vue d'ensemble", "Bad Debt": "Créances irrécouvrables", "Bad Debt, All Time": "Créances irrécouvrables, au total", "No bad debt": "Aucune créance irrécouvrable",
+  "When you write off money that will not be paid, it shows here with the customer or agent it belongs to.": "Quand vous passez en perte de l'argent qui ne sera pas payé, il apparaît ici avec le client ou l'agent concerné.",
+  "Money written off as never to be paid. Tap a name to see their records.": "Argent passé en perte car il ne sera jamais payé. Touchez un nom pour voir ses saisies.",
+  "Keep what you typed as a draft?": "Garder ce que vous avez tapé comme brouillon ?", "Continuing where you stopped": "Reprise là où vous vous êtes arrêté",
+  "That entry no longer exists, so its draft was removed.": "Cette saisie n'existe plus, son brouillon a donc été supprimé.", "Drafts": "Brouillons", "No drafts.": "Aucun brouillon.",
+  "Undo": "Annuler", "Undone": "Annulé", "Changes saved": "Modifications enregistrées", "Delete this entry?": "Supprimer cette saisie ?"
+}, [
+  [/^(\d+) drafts?$/, "$1 brouillon(s)"], [/^(\d+) write-offs?, last (.+)$/, "$1 perte(s), dernière le $2"], [/^1 person$/, "1 personne"], [/^(\d+) people$/, "$1 personnes"], [/^(\d+) rows$/, "$1 lignes"]
+]);

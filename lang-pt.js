@@ -998,3 +998,16 @@ I18N.add('pt', {
   [/^(\d+) messages? to record$/, "$1 mensagem(ns) a registar"], [/^Messages to Record \((\d+)\)$/, "Mensagens a registar ($1)"],
   [/^(.+) is paying what they owe$/, "$1 está a pagar o que deve"], [/^owes (.+)$/, "deve $1"]
 ]);
+I18N.add('pt', {
+  "Agent Phone": "Telefone do agente", "Receiving Number": "Número que recebeu", "Description (Optional)": "Descrição (opcional)",
+  "Assistant": "Assistente", "Master": "Principal", "Referral": "Indicação", "Assistant Agent": "Agente assistente", "Referral Agent": "Agente de indicação", "EVC Agent": "Agente EVC",
+  "Agent or Partner Phone": "Telefone do agente ou parceiro", "Type any name. New agents are welcome.": "Escreva qualquer nome. Novos agentes são aceites.",
+  "Overview": "Resumo", "Bad Debt": "Dívidas incobráveis", "Bad Debt, All Time": "Dívidas incobráveis, total", "No bad debt": "Sem dívidas incobráveis",
+  "When you write off money that will not be paid, it shows here with the customer or agent it belongs to.": "Quando dá como perdido dinheiro que não será pago, aparece aqui com o cliente ou agente a que pertence.",
+  "Money written off as never to be paid. Tap a name to see their records.": "Dinheiro dado como perdido porque nunca será pago. Toque num nome para ver os registos.",
+  "Keep what you typed as a draft?": "Guardar o que escreveu como rascunho?", "Continuing where you stopped": "A continuar onde parou",
+  "That entry no longer exists, so its draft was removed.": "Esse registo já não existe, por isso o rascunho foi apagado.", "Drafts": "Rascunhos", "No drafts.": "Sem rascunhos.",
+  "Undo": "Anular", "Undone": "Anulado", "Changes saved": "Alterações guardadas", "Delete this entry?": "Apagar este registo?"
+}, [
+  [/^(\d+) drafts?$/, "$1 rascunho(s)"], [/^(\d+) write-offs?, last (.+)$/, "$1 perda(s), última a $2"], [/^1 person$/, "1 pessoa"], [/^(\d+) people$/, "$1 pessoas"], [/^(\d+) rows$/, "$1 linhas"]
+]);

@@ -256,8 +256,9 @@
       var k = agentKey(r.name);
       if (!k) return;
       var a = map[k] || (map[k] = { key: k, name: String(r.name).trim(), phone: '', type: '', net: 0, entries: 0, last: r.date, writtenOff: 0 });
-      if (!a.phone && r.phone) a.phone = normStored(r.phone);
-      if (!a.type && r.type) a.type = r.type;
+      // Rows are oldest first, so the latest entry's phone and agent type win.
+      if (r.phone) a.phone = normStored(r.phone);
+      if (r.type) a.type = r.type;
       a.net = r2(a.net + r.net); a.entries++; a.writtenOff += num(r.writtenOff);
       if (r.date > a.last) a.last = r.date;
     });

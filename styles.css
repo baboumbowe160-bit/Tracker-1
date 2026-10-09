@@ -704,3 +704,22 @@ select.picked { display: none; }
 .inboxtext { font-size: .84rem; color: var(--ink-soft); margin: 4px 0 10px; line-height: 1.35; overflow-wrap: anywhere; }
 .inboxacts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .capset { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 4px; }
+
+/* Undo bar */
+#undobar { position: fixed; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom, 0px) + 84px); z-index: 500; display: none; align-items: center; justify-content: space-between; gap: 12px;
+  background: #101828; color: #fff; border-radius: 14px; padding: 10px 10px 10px 16px; box-shadow: 0 10px 24px -8px rgba(16,24,40,.45); font-weight: 600; max-width: 520px; margin: 0 auto; }
+#undobar.on { display: flex; }
+#undobar button { background: none; border: 0; color: #8FB2FF; font: inherit; font-weight: 800; font-size: .98rem; padding: 8px 12px; border-radius: 10px; }
+#undobar button:active { background: rgba(255,255,255,.1); }
+.chipa.draft { border-color: #FEDF89; background: #FFFAEB; color: #B54708; }
+
+/* Agent types */
+.mchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.mchip { border: 1.5px solid var(--line); background: var(--card); color: var(--ink-soft); border-radius: 18px; padding: 7px 13px; font: inherit; font-size: .86rem; font-weight: 700; min-height: 36px; }
+.mchip.on { border-color: var(--blue); background: var(--blue-soft); color: var(--blue); }
+.mchip.on::before { content: "✓ "; }
+.tpills { display: flex; flex-wrap: wrap; gap: 4px; }
+.pill.p-assist { background: #E0F7F4; color: #0F766E; }
+.pill.p-refer { background: #F1EBFF; color: #6D28D9; }
+.pill.p-evc { background: #FFF0E2; color: #C2410C; }
+.tchips { margin-bottom: 10px; }

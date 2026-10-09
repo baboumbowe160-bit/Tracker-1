@@ -186,7 +186,7 @@
   function setTab(t) { UI.stack = [{ v: t }]; UI.limit = 120; render(); window.scrollTo(0, 0); }
   window.addEventListener('popstate', function () {
     if (closePicker()) return;
-    if (UI.sheetOpen) { removeSheet(); return; }
+    if (UI.sheetOpen) { draftOnClose(); removeSheet(); return; }
     if (UI.stack.length > 1) { UI.stack.pop(); render(); }
   });
 
@@ -360,6 +360,21 @@
   }
   var STATUS_CLASS = { 'Paid': 'p-paid', 'Overpaid': 'p-overpaid', 'Outstanding': 'p-outstanding', 'Overdue': 'p-overdue', 'Bad debt': 'p-bad' };
   var TYPE_CLASS = { 'Regular': 'p-regular', 'Irregular': 'p-irregular', 'Inactive (90+ days)': 'p-inactive', 'Bad (high risk)': 'p-overdue', 'Do not give credit': 'p-bad' };
+  var AGENT_TYPES = ['Assistant Agent', 'Master Agent', 'Regular Agent', 'Referral Agent', 'EVC Agent'];
+  var TYPE_PILL = { 'Assistant Agent': 'p-assist', 'Master Agent': 'p-master', 'Regular Agent': 'p-irregular', 'Referral Agent': 'p-refer', 'EVC Agent': 'p-evc' };
+  function typeList(t) { return String(t || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean); }
+  function typePills(t) { return typeList(t).map(function (x) { return pill(x, TYPE_PILL[x] || 'p-irregular'); }).join(' '); }
+  function multiHTML(name, opts, value, cls) {
+    var on = typeList(value);
+    return '<div class="mchips">' + opts.map(function (o) { return '<button type="button" class="mchip' + (on.indexOf(o) >= 0 ? ' on' : '') + '" data-act="multiPick" data-v="' + esc(o) + '">' + esc(o.replace(/ Agent$/, '')) + '</button>'; }).join('') +
+      '</div><input type="hidden"' + (name ? ' name="' + name + '"' : '') + (cls ? ' class="' + cls + '"' : '') + ' value="' + esc(on.join(', ')) + '">';
+  }
+  function setMulti(field, value) {
+    if (!field) return;
+    var on = typeList(value), hid = field.querySelector('input[type=hidden]');
+    Array.prototype.forEach.call(field.querySelectorAll('.mchip'), function (b) { b.classList.toggle('on', on.indexOf(b.getAttribute('data-v')) >= 0); });
+    if (hid) hid.value = on.join(', ');
+  }
   function pill(text, cls) { return text ? '<span class="pill ' + (cls || 'p-paid') + '">' + esc(text) + '</span>' : ''; }
   function balanceText(b, big) {
     var cls = big ? 'big ' : 'amount ';
@@ -525,7 +540,7 @@
     if (!g) markAlive();
     document.body.classList.toggle('hide-amounts', !!S.meta.hideAmounts);
     if (g) {
-      if (UI.sheetOpen) removeSheet();
+      if (UI.sheetOpen) { saveDraft(true); UI.resumeTried = false; removeSheet(); }
       root.innerHTML = GATES[g]();
       if (g === 'lock' && Security.bioEnabled() && !UI.bioTried) { UI.bioTried = true; setTimeout(function () { ACT.pinBio(); }, 300); }
       return;
@@ -540,7 +555,12 @@
     root.innerHTML = top + '<main>' + body + '</main>' + navBar() + fab(v);
     if (LISTS[v.v]) renderList();
     decorateRows(); enhancePickers(root);
-    if (UI.pendingShare && !UI.sheetOpen) { var ps = UI.pendingShare; UI.pendingShare = null; setTimeout(function () { openCapture(ps.text, ps.id, ps.when); }, 60); }
+    if (UI.pendingShare && !UI.sheetOpen) { var ps = UI.pendingShare; UI.pendingShare = null; UI.resumeTried = true; setTimeout(function () { openCapture(ps.text, ps.id, ps.when); }, 60); }
+    else if (!UI.resumeTried && !UI.sheetOpen) {
+      UI.resumeTried = true;
+      var act = draftsGet().filter(function (x) { return x.active; }).sort(function (a, b) { return b.at - a.at; })[0];
+      if (act) setTimeout(function () { if (!UI.sheetOpen) resumeDraft(act); }, 80);
+    }
   }
   function navBar() {
     var t = UI.stack[0].v;
@@ -609,7 +629,8 @@
     h += '<div class="owed"><button data-act="custFilterGo" data-v="owing"><span class="lab">To Collect</span><b class="c-owed">' + money(r2(t.owed + ag.collect)) + '</b>' +
       '<small>' + owing + ' ' + (owing === 1 ? 'customer' : 'customers') + ' · ' + ag.n + ' ' + (ag.n === 1 ? 'agent' : 'agents') + '</small></button>' +
       '<button data-act="tab" data-v="agents"><span class="lab">To Pay</span><b>' + money(r2(t.credit + ag.pay)) + '</b><small>Agents and advance payments</small></button></div>';
-    var chips = '', waiting = inboxGet().length;
+    var chips = '', waiting = inboxGet().length, nDrafts = draftsGet().length;
+    if (nDrafts) chips += '<button class="chipa draft" data-act="draftsOpen">' + icon('rules') + '<span>' + nDrafts + (nDrafts === 1 ? ' draft' : ' drafts') + '</span></button>';
     if (waiting) chips += '<button class="chipa msg" data-act="capInbox">' + icon('chat') + '<span>' + waiting + (waiting === 1 ? ' message to record' : ' messages to record') + '</span></button>';
     if (R.risk.alerts.length) chips += '<button class="chipa warn" data-act="go" data-v="risk">' + icon('risk') + '<span>' + R.risk.alerts.length + (R.risk.alerts.length === 1 ? ' risk alert' : ' risk alerts') + '</span></button>';
     if (t.overdue) chips += '<button class="chipa" data-act="salesFilterGo" data-v="overdue">' + icon('history') + '<span>' + t.overdue + ' overdue</span></button>';
@@ -627,8 +648,39 @@
     if (recent.length) h += '<div class="sec-head"><b>Recent</b><button data-act="tab" data-v="history">See all</button></div><div class="recent">' + recent.map(entryRow).join('') + '</div>';
     return h;
   };
+  /* Bad debt: amounts written off as never to be paid, grouped by the customer or agent they belong to. */
+  function badDebts() {
+    var map = {}, month = R.today.slice(0, 7), total = 0, monthTotal = 0;
+    function add(kind, key, name, phone, r, reason) {
+      var amt = num(r.writtenOff); if (!(amt > 0)) return;
+      var k = kind + '|' + key, g = map[k] || (map[k] = { kind: kind, key: key, name: name, phone: phone || '', amount: 0, count: 0, last: '', reasons: {} });
+      g.amount = r2(g.amount + amt); g.count++; if ((r.date || '') > g.last) g.last = r.date || '';
+      if (reason) g.reasons[reason] = 1;
+      total = r2(total + amt); if ((r.date || '').slice(0, 7) === month) monthTotal = r2(monthTotal + amt);
+    }
+    R.sales.forEach(function (r) { add('cust', r.key, r.name, r.phone, r, r.woReason); });
+    R.agents.rows.forEach(function (r) { add('agent', C.agentKey(r.name), r.name, r.phone, r, r.woReason); });
+    var list = Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return b.amount - a.amount; });
+    return { list: list, total: total, month: monthTotal };
+  }
+  function badDebtTab() {
+    var bd = badDebts(), h = '';
+    h += '<div class="figures"><div class="figure"><div class="label">Bad Debt, All Time</div><div class="big ' + (bd.total ? 'c-late' : '') + '">' + money(bd.total) + '</div></div>' +
+      '<div class="figure"><div class="label">This Month</div><div class="big ' + (bd.month ? 'c-late' : '') + '">' + money(bd.month) + '</div></div></div>';
+    if (!bd.list.length) return h + empty('No bad debt', 'When you write off money that will not be paid, it shows here with the customer or agent it belongs to.');
+    h += '<p class="hint">Money written off as never to be paid. Tap a name to see their records.</p>';
+    return h + bd.list.map(function (g) {
+      var reasons = Object.keys(g.reasons).join(', ');
+      return '<button class="row" data-act="' + (g.kind === 'cust' ? 'openCustomer' : 'openAgent') + '" data-key="' + esc(g.key) + '"><div class="top"><div><div class="name">' + esc(g.name || 'No name') + '</div>' +
+        '<div class="detail">' + esc((g.kind === 'cust' ? 'Customer' : 'Agent') + (g.phone ? ' · ' + phoneLine(g.phone) : '')) + '</div></div><span class="amount c-late">' + money(g.amount) + '</span></div>' +
+        '<div class="bottom"><span class="c-muted">' + esc(g.count + (g.count === 1 ? ' write-off' : ' write-offs') + ', last ' + shortDate(g.last)) + '</span></div>' +
+        (reasons ? '<div class="detail" style="margin-top:4px">' + esc(reasons) + '</div>' : '') + '</button>';
+    }).join('');
+  }
   VIEWS.reports = function () {
-    var t = R.totals, month = R.today.slice(0, 7), h = '';
+    var tabs = seg('repTab', UI.repTab || 'overview', [['overview', 'Overview'], ['baddebt', 'Bad Debt']]);
+    if (UI.repTab === 'baddebt') return tabs + badDebtTab();
+    var t = R.totals, month = R.today.slice(0, 7), h = tabs;
     var lossM = (R.losses.byMonth.filter(function (x) { return x.month === month; })[0] || {}).amount || 0;
     var commM = (R.commMonths.filter(function (x) { return x.month === month; })[0] || {}).total || 0;
     var mNow = R.months.filter(function (x) { return x.month === month; })[0] || { tips: 0, billed: 0, paid: 0 };
@@ -640,6 +692,8 @@
       '<button class="figure" data-act="go" data-v="comm" style="text-align:left"><div class="label">Commission This Month</div><div class="big c-credit">' + money(commM) + '</div><div class="sub">All time ' + money(t.commission) + '</div></button>' +
       '<button class="figure" data-act="go" data-v="losses" style="text-align:left"><div class="label">Losses This Month</div><div class="big ' + (lossM ? 'c-late' : '') + '">' + money(lossM) + '</div><div class="sub">All time ' + money(R.losses.total) + '</div></button>' +
       '<button class="figure wide" data-act="go" data-v="capital" style="text-align:left"><div class="label">Working Capital</div><div class="big">' + (R.capital.rows[0] ? money(R.capital.rows[0].working) : '—') + '</div><div class="sub">' + (R.capital.rows[0] ? 'From ' + esc(shortDate(R.capital.rows[0].date)) : 'Record your balances') + '</div></button></div>';
+    var bdx = badDebts();
+    h = h.replace('<div class="figures">', '<div class="figures"><button class="figure" data-act="repTab" data-v="baddebt" style="text-align:left"><div class="label">Bad Debt</div><div class="big ' + (bdx.total ? 'c-late' : '') + '">' + money(bdx.total) + '</div><div class="sub">' + bdx.list.length + (bdx.list.length === 1 ? ' person' : ' people') + '</div></button>');
     h += chartMonthly() + chartTopOwing() + chartCustomerMix() + chartCommission();
     return h;
   };
@@ -867,13 +921,16 @@
   };
   LISTS.agents = function () {
     var q = UI.agentQuery.trim().toLowerCase(), h = '';
-    var bal = R.agents.balances.filter(function (a) { return !q || (a.name + ' ' + a.phone).toLowerCase().indexOf(q) >= 0; });
+    var ft = UI.agentType || '';
+    var bal = R.agents.balances.filter(function (a) { return (!q || (a.name + ' ' + a.phone).toLowerCase().indexOf(q) >= 0) && (!ft || typeList(a.type).indexOf(ft) >= 0); });
+    h += '<div class="chips tchips">' + [['', 'All']].concat(AGENT_TYPES.map(function (x) { return [x, x.replace(/ Agent$/, '')]; })).map(function (o) {
+      return '<button class="chip' + (ft === o[0] ? ' on' : '') + '" data-act="agentType" data-v="' + esc(o[0]) + '">' + esc(o[1]) + '</button>'; }).join('') + '</div>';
     if (!R.agents.rows.length) return empty('No agent entries yet', 'Tap the green button to record a float transfer, EVC, bank exchange or other agent entry.');
     if (bal.length) {
       h += '<div class="section-title">Balances</div>';
       h += bal.map(function (a) {
         return '<button class="row" data-act="openAgent" data-key="' + esc(a.key) + '"><div class="top"><div><div class="name">' + esc(a.name) + '</div><div class="detail">' + esc(phoneLine(a.phone)) + ', ' + a.entries + ' entries</div></div>' + agentNetText(a.net) + '</div>' +
-          (a.type ? '<div class="bottom"><span></span>' + pill(a.type, /master/i.test(a.type) ? 'p-master' : 'p-irregular') + '</div>' : '') + '</button>';
+          (a.type ? '<div class="bottom"><span class="tpills">' + typePills(a.type) + '</span></div>' : '') + '</button>';
       }).join('');
     }
     var rows = R.agents.rows.filter(function (r) {
@@ -910,7 +967,7 @@
     var a = findAgent(v.key);
     if (!a) return empty('Agent not found', 'They may have been removed.');
     var rows = R.agents.rows.filter(function (r) { return C.agentKey(r.name) === a.key; }).sort(byNewest);
-    return '<div class="detail-hero"><div class="who">' + esc(a.name) + '</div><div class="sub">' + esc(phoneLine(a.phone)) + ' ' + pill(a.type, /master/i.test(a.type) ? 'p-master' : 'p-irregular') + '</div>' +
+    return '<div class="detail-hero"><div class="who">' + esc(a.name) + '</div><div class="sub">' + esc(phoneLine(a.phone)) + ' ' + typePills(a.type) + '</div>' +
       '<div>' + agentNetText(a.net, true) + '</div><div class="stats"><div><span>Entries</span><b>' + a.entries + '</b></div><div><span>Last Entry</span><b>' + esc(shortDate(a.last)) + '</b></div>' +
       '<div><span>Written Off</span><b>' + money(a.writtenOff) + '</b></div></div>' +
       '<div class="actions"><button class="btn primary" data-act="shareFor" data-type="Agent" data-key="' + esc(a.key) + '">Send Reminder</button></div></div>' +
@@ -1588,17 +1645,17 @@
       { k: 'date', t: 'pickdate', label: 'Date of This Entry', req: 1 },
       { k: 'time', t: 'time', label: 'Time (Optional)' },
       { k: 'name', t: 'text', label: 'Agent Name', req: 1, list: 'agentNames' },
+      { k: 'phone', t: 'tel', label: 'Agent Phone', list: 'agentPhones' },
+      { k: 'type', t: 'multi', label: 'Agent Type', opts: AGENT_TYPES },
+      { k: 'txNumber', t: 'tel', label: 'Receiving Number' },
       { k: 'txType', t: 'select', label: 'Transaction Type', opts: 'agentTxTypes' },
-      { k: 'desc', t: 'text', label: 'Description' },
       { k: 'toAgent', t: 'num', label: 'Paid to Agent', half: 1 },
       { k: 'fromAgent', t: 'num', label: 'Received from Agent', half: 1 },
-      { k: 'txNumber', t: 'tel', label: 'Number That Received the Service', note: 'The phone number that received the float, credit or service.', more: 1 },
-      { k: 'phone', t: 'tel', label: 'Agent WhatsApp / Phone', more: 1 },
-      { k: 'type', t: 'select', label: 'Agent Type', opts: ['Regular Agent', 'Master Agent'], more: 1 },
+      { k: 'desc', t: 'text', label: 'Description (Optional)' },
       { k: 'writtenOff', t: 'num', label: woLabel, more: 1 },
       { k: 'woReason', t: 'select', label: 'Reason for Write-Off', opts: 'woReasons', show: function (v) { return num(v.writtenOff) > 0; }, more: 1 },
       { k: 'notes', t: 'area', label: 'Notes', more: 1 }],
-      defaults: function () { return { date: '', type: 'Regular Agent' }; },
+      defaults: function () { return { date: '', type: '' }; },
       keep: ['date'], info: agentInfo,
       check: function (v, errs) { if (!C.has(v.toAgent) && !C.has(v.fromAgent) && !(num(v.writtenOff) > 0)) errs.push('Type the amount you paid to the agent, or received from the agent.'); } },
     referral: { title: ['New Referral Sale', 'Edit Referral Sale'], coll: 'referrals', prefix: function () { return 'RA'; }, fields: [
@@ -1620,8 +1677,9 @@
       { k: 'wallet', t: 'selectother', label: 'Wallet', opts: 'wallets', req: 1 },
       { k: 'earned', t: 'num', label: 'Commission on Statement', half: 1 },
       { k: 'received', t: 'num', label: 'Commission Paid to You', half: 1 },
-      { k: 'shared', t: 'num', label: 'Shared with an Agent or Partner', more: 1 },
-      { k: 'agentName', t: 'text', label: 'Agent or Partner Name', list: 'agentNames', more: 1 },
+      { k: 'shared', t: 'num', label: 'Shared with an Agent or Partner' },
+      { k: 'agentName', t: 'text', label: 'Agent or Partner Name', list: 'agentNames', note: 'Type any name. New agents are welcome.' },
+      { k: 'agentPhone', t: 'tel', label: 'Agent or Partner Phone', list: 'agentPhones' },
       { k: 'notes', t: 'area', label: 'Notes', more: 1 }],
       defaults: function () { return { month: R.today.slice(0, 7) }; },
       info: function (v) { return calcBox([['Net Commission', money(num(v.received) - num(v.shared))]]); } },
@@ -1630,7 +1688,7 @@
       { k: 'provider', t: 'selectother', label: 'EVC Operator', opts: 'evcProviders', req: 1 },
       { k: 'purchase', t: 'num', label: 'Purchase Amount', req: 1, half: 1 },
       { k: 'wholesale', t: 'num', label: 'Part Sold to Other Dealers', half: 1, note: 'Wholesale. Leave empty if you sold it all to customers.' },
-      { k: 'wholesaler', t: 'text', label: 'Dealer Name', show: function (v) { return num(v.wholesale) > 0; } },
+      { k: 'wholesaler', t: 'text', label: 'Dealer Name', list: 'agentNames', show: function (v) { return num(v.wholesale) > 0; } },
       { k: 'rate', t: 'num', label: 'Operator Commission Rate (%)', note: 'The percentage the operator gives you on what you buy.' },
       { k: 'retailRoy', t: 'num', label: 'Share Paid to Partner on Retail Sales (%)', note: 'Only if you share part of your commission with a partner or line owner. Otherwise leave it at 0.', more: 1 },
       { k: 'wholesaleRoy', t: 'num', label: 'Share Paid to Partner on Wholesale (%)', more: 1 },
@@ -1735,6 +1793,9 @@
         return '<button type="button" class="pchip ' + m[0] + (v === m[0] ? ' on' : '') + '" data-act="payMode" data-v="' + m[0] + '"><b>' + m[1] + '</b><small>' + m[2] + '</small></button>';
       }).join('') + '</div><input type="hidden" name="' + f.k + '" value="' + esc(v) + '">' + (v ? '' : '<div class="note datenote">Tap how this sale was paid.</div>') + '</div>';
     }
+    if (f.t === 'multi') {
+      return '<div class="field' + hide + '" data-field="' + f.k + '">' + lab + multiHTML(f.k, f.opts, v) + '</div>';
+    }
     if (f.t === 'check') {
       return '<div class="field' + hide + '" data-field="' + f.k + '"><label class="check"><input type="checkbox" name="' + f.k + '"' + (v ? ' checked' : '') + '><span>' + esc(text) + '</span></label></div>';
     }
@@ -1776,6 +1837,7 @@
   }
   function autoTime(vals) { if (vals.date === R.today && !vals.time) vals.time = nowTime(); return vals; }
   function openForm(type, rec, extra) {
+    UI.draftId = null;
     var sc = SCHEMAS[type], isNew = !rec;
     var vals = Object.assign({}, isNew && sc.defaults ? sc.defaults() : {}, rec || {}, (extra && extra.prefill) || {});
     if (type === 'sale') { vals.payMode = isNew ? vals.payMode : inferPay(rec); if (!isNew) vals.costDs = rec.costOut; }
@@ -1837,7 +1899,7 @@
     el.innerHTML = '<div class="sheet-back" data-act="closeSheet"></div><div class="sheet" role="dialog" aria-modal="true" aria-label="' + esc(title) + '">' +
       '<header><h2>' + esc(title) + '</h2><button data-act="closeSheet">Close</button></header><div class="body">' + body + '</div><footer>' + foot + '</footer></div>';
     document.body.appendChild(el);
-    UI.sheetOpen = true; document.body.style.overflow = 'hidden';
+    UI.sheetOpen = true; document.body.style.overflow = 'hidden'; UI.draftDone = false;
     history.pushState({ sheet: 1 }, '');
     setTimeout(function () { enhancePickers(el); enhanceQuick(el); }, 0);
   }
@@ -1898,16 +1960,20 @@
     var kept = {}; (F.schema.keep || []).forEach(function (k) { kept[k] = vals[k]; });
     if (vals.channel) S.meta.lastChannel = vals.channel;
     Object.keys(vals).forEach(function (k) { if (k.indexOf('__') === 0) delete vals[k]; });
+    undoPoint();
     if (F.captureId) inboxRemove(F.captureId);
+    if (F.type === 'agent' && !vals.type) { var ka = findAgent(C.agentKey(vals.name)); vals.type = ka && ka.type ? ka.type : 'Regular Agent'; }
     var savedId = '';
     if (F.type === 'capital') savedId = saveCapital(vals);
     else if (F.isNew) { recordMeta(F, vals); S[F.schema.coll].push(vals); }
     else { Object.assign(F.rec, vals); F.rec.editedAt = Date.now(); if (!F.rec.refId && F.schema.prefix) F.rec.refId = C.newRefId(S, F.schema.prefix(F.rec), F.rec.date); }
     if (addAnother && F.isNew && F.schema.keep) {
-      persist(); render(); refillForm(F.type, kept); toast('Saved. Add the next one.');
+      draftDrop(); UI.draftId = null;
+      persist(); render(); refillForm(F.type, kept); offerUndo('Saved. Add the next one.');
       return;
     }
-    persist().then(function () { toast(F.type === 'capital' ? checkMessage(savedId) : 'Saved'); });
+    draftFinished();
+    persist().then(function () { if (F.type === 'capital') toast(checkMessage(savedId)); else offerUndo(F.isNew ? 'Saved' : 'Changes saved'); });
     closeSheet(); render();
   }
   function checkMessage(id) {
@@ -2000,13 +2066,20 @@
   function agentBatchRow(i) {
     return '<div class="batch-row"><div class="batch-head"><b>Entry ' + (i + 1) + '</b><button type="button" class="linkbtn" data-act="batchRemove">Remove</button></div>' + dateTimeRow() +
       '<div class="field"><label>Agent Name</label><input type="text" class="b-agent" aria-label="Agent name" data-suggest="agent" autocomplete="off"></div>' +
+      '<div class="field"><label>Agent Phone</label><div class="telrow"><select class="ccsel b-acc" aria-label="Country of this number">' + ccOptions(S.settings.profile.country) + '</select>' +
+      '<input type="tel" inputmode="tel" class="b-aphone" aria-label="Agent phone" data-suggest="agent" autocomplete="off"></div><div class="netline"></div></div>' +
+      '<div class="field"><label>Agent Type</label>' + multiHTML('', AGENT_TYPES, '', 'b-types') + '</div>' +
+      '<div class="field"><label>Receiving Number</label><div class="telrow"><select class="ccsel b-tcc" aria-label="Country of this number">' + ccOptions(S.settings.profile.country) + '</select>' +
+      '<input type="tel" inputmode="tel" class="b-txnum" aria-label="Receiving number" autocomplete="off"></div><div class="netline"></div></div>' +
       '<div class="field"><label>Transaction Type</label><select class="b-txtype" aria-label="Transaction type"><option value="">Choose</option>' + opts('agentTxTypes').map(function (x) { return '<option>' + esc(x) + '</option>'; }).join('') + '</select></div>' +
-      '<div class="field"><label>Description</label><input type="text" class="b-desc" aria-label="Description"></div>' +
       '<div class="two"><div class="field"><label>Paid to Agent</label><input type="number" step="any" inputmode="decimal" class="b-to" aria-label="Paid to agent"></div>' +
-      '<div class="field"><label>Received from Agent</label><input type="number" step="any" inputmode="decimal" class="b-from" aria-label="Received from agent"></div></div></div>';
+      '<div class="field"><label>Received from Agent</label><input type="number" step="any" inputmode="decimal" class="b-from" aria-label="Received from agent"></div></div>' +
+      '<div class="field"><label>Description (Optional)</label><input type="text" class="b-desc" aria-label="Description"></div></div>';
   }
   function batchRowHTML(i) { return UI.batchMode === 'agent' ? agentBatchRow(i) : saleBatchRow(i); }
   function openBatch(mode) {
+    if (UI.sheetOpen) draftDrop();
+    UI.draftId = null;
     UI.batchMode = mode === 'agent' ? 'agent' : 'sale'; UI.batchDate = ''; UI.batchKind = 'DS';
     var isAgent = UI.batchMode === 'agent', top = '<div id="batch-top">' + (isAgent ? '' : seg('batchKind', 'DS', [['DS', 'Data / Deposit'], ['WE', 'Wallet Exchange']])) +
       fieldHTML({ k: 'bdate', t: 'pickdate', label: isAgent ? 'Date for These Entries' : 'Date for These Sales' }, {}) +
@@ -2039,8 +2112,10 @@
   function batchSave() { if (UI.batchMode === 'agent') batchSaveAgents(); else batchSaveSales(); }
   function batchFinish(out, coll, prefixOf, label) {
     var errsBox = document.getElementById('form-error');
+    undoPoint();
     out.forEach(function (r) { r.id = uid(); r.seq = S.nextSeq++; r.recordedAt = Date.now(); r.refId = C.newRefId(S, prefixOf(r), r.date); S[coll].push(r); });
-    persist().then(function () { toast('Saved ' + out.length + (out.length === 1 ? ' ' + label : ' ' + label + 's')); });
+    draftFinished();
+    persist().then(function () { offerUndo('Saved ' + out.length + (out.length === 1 ? ' ' + label : ' ' + label + 's')); });
     closeSheet(); render();
   }
   function batchSaveSales() {
@@ -2079,9 +2154,12 @@
       var date = g('b-date'), miss = [];
       if (!date) miss.push('date'); if (!name) miss.push('agent name'); if (to === '' && from === '') miss.push('amount paid or received');
       if (miss.length) { errs.push(n + 'add the ' + miss.join(', ')); return; }
-      var known = findAgent(C.agentKey(name));
+      var known = findAgent(C.agentKey(name)), ap = g('b-aphone'), tn = g('b-txnum');
+      var pa = ap ? C.parsePhone(ap, row.querySelector('.b-acc').value) : { ok: true, value: '' }, pt = tn ? C.parsePhone(tn, row.querySelector('.b-tcc').value) : { ok: true, value: '' };
+      if (!pa.ok) { errs.push(n + 'agent phone: ' + pa.error); return; }
+      if (!pt.ok) { errs.push(n + 'receiving number: ' + pt.error); return; }
       out.push({ date: date, time: g('b-time'), name: name, txType: g('b-txtype'), desc: g('b-desc'), toAgent: to === '' ? '' : Number(to), fromAgent: from === '' ? '' : Number(from),
-        phone: known ? known.phone : '', type: known && known.type ? known.type : 'Regular Agent' });
+        phone: pa.value || (known ? known.phone : ''), txNumber: pt.value || '', type: g('b-types') || (known && known.type ? known.type : 'Regular Agent') });
     });
     var box = document.getElementById('form-error');
     if (errs.length) { box.innerHTML = '<div class="form-error">' + errs.map(esc).join('<br>') + '</div>'; document.querySelector('.sheet .body').scrollTop = 0; return; }
@@ -2258,7 +2336,7 @@
     },
     bioOn: function () { Security.enableBio().then(function () { toast('Fingerprint is on'); render(); }, function () { toast('Could not turn on fingerprint on this phone.'); }); },
     bioOff: function () { Security.disableBio().then(function () { toast('Fingerprint is off'); render(); }); },
-    lockNow: function () { try { sessionStorage.removeItem('act-alive'); } catch (e) {} UI.locked = true; UI.pin = ''; UI.pinMsg = ''; UI.bioTried = false; UI.stack = [{ v: 'home' }]; render(); },
+    lockNow: function () { try { sessionStorage.removeItem('act-alive'); } catch (e) {} if (UI.sheetOpen) saveDraft(true); UI.resumeTried = false; UI.locked = true; UI.pin = ''; UI.pinMsg = ''; UI.bioTried = false; UI.stack = [{ v: 'home' }]; render(); },
     lockForgot: function () { UI.forgot = true; render(); },
     forgotBack: function () { UI.forgot = false; render(); },
     forgotReset: function () {
@@ -2358,9 +2436,11 @@
     saveForm: function () { saveForm(false); },
     deleteRec: function () {
       if (!FORM || !FORM.rec || !FORM.schema.coll) return;
-      if (!confirm('Delete this entry? This cannot be undone.')) return;
+      if (!confirm('Delete this entry?')) return;
+      undoPoint();
       var arr = S[FORM.schema.coll], i = arr.indexOf(FORM.rec); if (i >= 0) arr.splice(i, 1);
-      persist().then(function () { toast('Deleted'); }); closeSheet(); render();
+      draftFinished();
+      persist().then(function () { offerUndo('Deleted'); }); closeSheet(); render();
     },
     recordPayment: function () {
       var rec = FORM && FORM.rec; if (!rec) return;
@@ -2369,15 +2449,30 @@
       if (ans === null) return;
       var amt = parseFloat(String(ans).replace(/,/g, ''));
       if (!isFinite(amt) || amt <= 0) { toast('Type an amount greater than 0.'); return; }
+      undoPoint();
       rec.received = r2(num(rec.received) + amt);
       if (num(rec.billed) - num(rec.received) - num(rec.writtenOff) <= 0 && rec.date < R.today && !rec.datePaid) rec.datePaid = R.today;
-      persist().then(function () { toast('Payment recorded'); }); closeSheet(); render();
+      draftFinished();
+      persist().then(function () { offerUndo('Payment recorded'); }); closeSheet(); render();
     },
     formSeg: function (d, el) {
       var wrap = el.parentNode; Array.prototype.forEach.call(wrap.children, function (b) { b.classList.toggle('on', b === el); });
       wrap.parentNode.querySelector('input[type=hidden]').value = d.v; refreshForm();
     },
     commTab: function (d) { UI.commTab = d.v; render(); },
+    undoLast: function () { undoLast(); },
+    draftsOpen: function () { openDrafts(); },
+    draftOpen: function (d) { var x = draftsGet().filter(function (y) { return y.id === d.id; })[0]; UI.draftDone = true; if (UI.sheetOpen) removeSheet(); if (x) setTimeout(function () { resumeDraft(x); }, 30); },
+    draftDelete: function (d) { draftDrop(d.id); if (draftsGet().length) openDrafts(); else { UI.draftDone = true; closeSheet(); render(); } },
+    repTab: function (d) { UI.repTab = d.v; render(); window.scrollTo(0, 0); },
+    agentType: function (d) { UI.agentType = d.v; UI.limit = 120; render(); },
+    multiPick: function (d, el) {
+      var field = el.closest('.field'); el.classList.toggle('on');
+      var on = Array.prototype.filter.call(field.querySelectorAll('.mchip'), function (b) { return b.classList.contains('on'); }).map(function (b) { return b.getAttribute('data-v'); });
+      var hid = field.querySelector('input[type=hidden]'); if (hid) hid.value = on.join(', ');
+      if (FORM) refreshForm();
+      if (typeof draftSoon === 'function') draftSoon();
+    },
     refTab: function (d) { UI.refTab = d.v; render(); },
     addBracket: function () { var box = document.getElementById('brackets'); box.insertAdjacentHTML('beforeend', bracketRow({ min: '', max: '', comm: '' })); },
     delBracket: function (d, el) { el.parentNode.remove(); },
@@ -2542,6 +2637,11 @@
     if (t.id === 'q-agents') { UI.agentQuery = t.value; UI.limit = 120; renderList(); return; }
     if (t.id === 'msg') { UI.shareText = t.value; return; }
     if (t.type === 'tel' && t.closest('.field')) updateNet(t);
+    if (t.classList.contains('b-agent')) {
+      var arow = t.closest('.batch-row'), ka2 = findAgent(C.agentKey(t.value)), tf = arow && arow.querySelector('.b-types');
+      if (ka2 && tf && !tf.value && ka2.type) setMulti(tf.closest('.field'), ka2.type);
+      if (ka2 && ka2.phone) { var apf = arow.querySelector('.b-aphone'); if (apf && !apf.value) setTel(telBox(apf), ka2.phone); }
+    }
     if (t.classList.contains('b-phone')) {
       var row = t.closest('.batch-row'), nm = row.querySelector('.b-name'), p = telParse(t);
       var cu = p.ok && !p.empty ? findCustomer(C.custKey({ phone: p.value })) : null;
@@ -2593,7 +2693,8 @@
       }
     }
     if (FORM.type === 'agent' && t.name === 'name') {
-      var a = findAgent(C.agentKey(t.value)); if (a) { set('phone', a.phone); var ty = sheet.querySelector('[name="type"]'); if (ty && a.type) ty.value = a.type; }
+      var a = findAgent(C.agentKey(t.value));
+      if (a) { set('phone', a.phone); var ty = sheet.querySelector('[name="type"]'); if (ty && !ty.value && a.type) setMulti(ty.closest('.field'), a.type); }
     }
     if (FORM.type === 'referral' && t.name === 'agent') {
       var prev = R.referrals.rows.filter(function (r) { return C.agentKey(r.agent) === C.agentKey(t.value); }).slice(-1)[0];
@@ -2608,10 +2709,18 @@
   /* ================= Suggestions while typing =================
      Replaces the phone's own list, which opened with every customer as soon as the box was tapped.
      Nothing shows until a few letters or digits are typed, and only matching people are shown. */
-  var SUGGEST_KIND = { custNames: 'cust', custPhones: 'cust', agentNames: 'agent', refAgents: 'ref' };
+  var SUGGEST_KIND = { custNames: 'cust', custPhones: 'cust', agentNames: 'agent', agentPhones: 'agent', refAgents: 'ref' };
   function suggestPool(kind) {
     if (kind === 'cust') return R.customers.filter(function (c) { return c.name || c.phone; }).map(function (c) { return { name: c.name || '', phone: c.phone || '' }; });
-    if (kind === 'agent') return R.agents.balances.map(function (a) { return { name: a.name, phone: a.phone || '' }; });
+    if (kind === 'agent') {
+      var seenA = {}, outA = [];
+      function addA(n, ph) { n = String(n || '').trim(); var k = n.toLowerCase(); if (!n) return; if (seenA[k]) { if (!seenA[k].phone && ph) seenA[k].phone = ph; return; } seenA[k] = { name: n, phone: ph || '' }; outA.push(seenA[k]); }
+      R.agents.balances.forEach(function (a) { addA(a.name, a.phone); });
+      (S.walletComm || []).forEach(function (r) { addA(r.agentName, r.agentPhone); });
+      (S.evc || []).forEach(function (r) { addA(r.wholesaler, ''); });
+      (S.referrals || []).forEach(function (r) { addA(r.agent, r.agentPhone); });
+      return outA;
+    }
     var seen = {}, out = [];
     R.referrals.rows.slice().reverse().forEach(function (r) {
       var n = String(r.agent || '').trim(), k = n.toLowerCase(); if (!n || seen[k]) return; seen[k] = 1; out.push({ name: n, phone: r.agentPhone || '' });
@@ -2917,6 +3026,145 @@
     return h;
   };
 
+
+  /* ================= Never lose an entry =================
+     Every open form (one entry or several at once) saves itself as a draft while you type.
+     If the app locks, goes to the background or is closed, the entry reopens where you stopped.
+     Closing a form yourself asks whether to keep what you typed as a draft. */
+  var DRAFT_KEY = 'entry-drafts', draftTimer = null;
+  function draftsGet() { try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || '[]') || []; } catch (e) { return []; } }
+  function draftsSet(a) { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(a.slice(-15))); } catch (e) {} }
+  function draftDrop(id) { id = id || UI.draftId; if (id) draftsSet(draftsGet().filter(function (x) { return x.id !== id; })); }
+  function batchSnap() {
+    var rows = Array.prototype.map.call(document.querySelectorAll('#batch-rows .batch-row'), function (row) {
+      var o = {};
+      Array.prototype.forEach.call(row.querySelectorAll('input, select, textarea'), function (el) {
+        var k = (String(el.className).match(/\bb-[a-z]+/) || [])[0]; if (!k) return;
+        o[k] = el.value; if (k === 'b-date' && el.dataset.touched) o.__dt = 1;
+      });
+      return o;
+    });
+    var bd = document.querySelector('#batch-top input[type=date]');
+    return { mode: UI.batchMode, kind: UI.batchKind, date: bd ? bd.value : (UI.batchDate || ''), chan: val('b-chan', ''), chanOther: val('b-chan-other', ''), ex: val('b-ex', ''), rows: rows };
+  }
+  function batchFilled(b) {
+    return b.rows.some(function (r) { return Object.keys(r).some(function (k) { return ['b-date', 'b-time', 'b-cc', 'b-acc', 'b-tcc', 'b-pay', '__dt'].indexOf(k) < 0 && String(r[k] || '').trim() !== ''; }); });
+  }
+  function draftSnapshot() {
+    if (!UI.sheetOpen) return null;
+    if (FORM && FORM.schema && SCHEMAS[FORM.type] && FORM.type !== 'capital' && document.querySelector('#sheetwrap [name]')) {
+      var vals = collect(); Object.keys(vals).forEach(function (k) { if (k.indexOf('__') === 0) delete vals[k]; });
+      var filled = FORM.schema.fields.some(function (f) { return ['text', 'num', 'tel', 'area'].indexOf(f.t) >= 0 && String(vals[f.k] == null ? '' : vals[f.k]).trim() !== ''; });
+      return { kind: 'form', type: FORM.type, recId: FORM.rec && FORM.rec.id || '', coll: FORM.schema.coll || '', isNew: !!FORM.isNew, captureId: FORM.captureId || '',
+        title: FORM.schema.title[FORM.isNew ? 0 : 1], vals: vals, filled: filled };
+    }
+    if (document.getElementById('batch-rows')) {
+      var b = batchSnap();
+      return { kind: 'batch', title: b.mode === 'agent' ? 'Several Agent Entries at Once' : 'Several Sales at Once', snap: b, filled: batchFilled(b) };
+    }
+    return null;
+  }
+  function saveDraft(active) {
+    clearTimeout(draftTimer);
+    var d = draftSnapshot(); if (!d) return;
+    if (!UI.draftId) UI.draftId = 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    var all = draftsGet().filter(function (x) { return x.id !== UI.draftId; });
+    if (d.filled) { d.id = UI.draftId; d.at = Date.now(); d.active = active !== false; all.push(d); }
+    draftsSet(all);
+  }
+  function draftSoon() { clearTimeout(draftTimer); draftTimer = setTimeout(function () { saveDraft(true); }, 400); }
+  /* The person closed the form themselves (Close or the back button). */
+  function draftOnClose() {
+    if (UI.draftDone) { UI.draftDone = false; UI.draftId = null; return; }
+    var d = draftSnapshot();
+    if (d && d.filled && confirm('Keep what you typed as a draft?')) saveDraft(false); else draftDrop();
+    UI.draftId = null;
+  }
+  /* A form was saved, deleted or replaced: its draft is no longer needed. */
+  function draftFinished() { draftDrop(); UI.draftId = null; UI.draftDone = true; }
+  function batchRestore(b) {
+    openBatch(b.mode);
+    if (b.mode !== 'agent' && b.kind === 'WE') { var wb = document.querySelector('#batch-top [data-act="batchKind"][data-v="WE"]'); if (wb) wb.click(); }
+    var bd = document.querySelector('#batch-top input[type=date]');
+    if (bd && b.date) {
+      bd.value = b.date; UI.batchDate = b.date;
+      var which = b.date === R.today ? 'today' : b.date === addDays(R.today, -1) ? 'yesterday' : 'other';
+      Array.prototype.forEach.call(document.querySelectorAll('#batch-top .dchip'), function (c) { c.classList.toggle('on', c.getAttribute('data-v') === which); });
+      if (which !== 'other') bd.classList.add('hide-date'); else bd.classList.remove('hide-date');
+    }
+    var box = document.getElementById('batch-rows');
+    while (box.querySelectorAll('.batch-row').length < b.rows.length) ACT.batchAdd();
+    while (box.querySelectorAll('.batch-row').length > Math.max(1, b.rows.length)) box.lastElementChild.remove();
+    var rowsEl = box.querySelectorAll('.batch-row');
+    b.rows.forEach(function (o, i) {
+      var row = rowsEl[i]; if (!row) return;
+      Object.keys(o).forEach(function (k) {
+        if (k === '__dt') return;
+        var el = row.querySelector('.' + k); if (!el) return;
+        el.value = o[k];
+        if (k === 'b-types') setMulti(el.closest('.field'), o[k]);
+        if (el.tagName === 'SELECT') el.dispatchEvent(new Event('change', { bubbles: true }));
+        if (el.type === 'tel') updateNet(el);
+      });
+      if (o.__dt) { var dt = row.querySelector('.b-date'); if (dt) dt.dataset.touched = '1'; }
+      var pay = row.querySelector('.b-pay'), rw = row.querySelector('.b-recv-wrap'); if (pay && rw) rw.classList.toggle('hide', pay.value !== 'part');
+    });
+    var tc = document.getElementById('b-chan');
+    if (tc) { tc.value = b.chan || ''; tc.dispatchEvent(new Event('change', { bubbles: true })); }
+    var to = document.getElementById('b-chan-other'); if (to) to.value = b.chanOther || '';
+    var ex = document.getElementById('b-ex'); if (ex) ex.value = b.ex || '';
+    renumberBatch();
+  }
+  function resumeDraft(d) {
+    if (!d) return;
+    if (d.kind === 'form') {
+      var rec = d.recId ? findRec(d.coll, d.recId) : null;
+      if (!d.isNew && !rec) { draftDrop(d.id); toast('That entry no longer exists, so its draft was removed.'); return; }
+      openForm(d.type, rec, { prefill: d.vals, captureId: d.captureId });
+    } else if (d.kind === 'batch') batchRestore(d.snap);
+    UI.draftId = d.id; UI.draftDone = false;
+    saveDraft(true);
+    toast('Continuing where you stopped');
+  }
+  document.addEventListener('input', function (e) { if (UI.sheetOpen && e.target.closest && e.target.closest('#sheetwrap')) draftSoon(); }, true);
+  document.addEventListener('change', function (e) { if (UI.sheetOpen && e.target.closest && e.target.closest('#sheetwrap')) draftSoon(); }, true);
+  document.addEventListener('click', function (e) { if (UI.sheetOpen && e.target.closest && e.target.closest('#sheetwrap [data-act]')) draftSoon(); }, true);
+  function openDrafts() {
+    var list = draftsGet().slice().reverse();
+    var body = list.length ? list.map(function (d) {
+      var what = d.kind === 'batch' ? d.snap.rows.filter(function (r) { return r['b-name'] || r['b-agent'] || r['b-amount'] || r['b-to'] || r['b-from']; }).length + ' rows' :
+        [d.vals.name || d.vals.agent || d.vals.category || '', d.vals.billed || d.vals.received || d.vals.amount || d.vals.toAgent || d.vals.fromAgent ? money(num(d.vals.billed || d.vals.received || d.vals.amount || d.vals.toAgent || d.vals.fromAgent)) : ''].filter(Boolean).join(' · ');
+      return '<div class="inboxitem"><div class="caphead"><span class="pbadge g-none">' + icon('rules') + '</span><div class="tx"><b>' + esc(d.title) + '</b><small>' + esc(stamp(d.at)) + '</small></div></div>' +
+        (what ? '<p class="inboxtext">' + esc(what) + '</p>' : '') +
+        '<div class="inboxacts"><button class="btn" data-act="draftDelete" data-id="' + esc(d.id) + '">Delete</button><button class="btn primary" data-act="draftOpen" data-id="' + esc(d.id) + '">Continue</button></div></div>';
+    }).join('') : '<p class="hint">No drafts.</p>';
+    openSheet('Drafts', body, '<button class="btn" data-act="closeSheet">Close</button>');
+  }
+
+  /* ================= Undo =================
+     Deleting, editing, restoring a backup and saving can be undone for a few seconds. */
+  var UNDO = null, undoTimer = null;
+  function undoPoint() { UNDO = JSON.stringify(S); }
+  function offerUndo(msg) {
+    if (!UNDO) { toast(msg); return; }
+    var bar = document.getElementById('undobar');
+    if (!bar) { bar = document.createElement('div'); bar.id = 'undobar'; bar.setAttribute('role', 'status'); document.body.appendChild(bar); }
+    bar.innerHTML = '<span>' + esc(msg) + '</span><button type="button" data-act="undoLast">Undo</button>';
+    bar.classList.add('on');
+    clearTimeout(undoTimer); undoTimer = setTimeout(function () { bar.classList.remove('on'); UNDO = null; }, 9000);
+  }
+  function undoLast() {
+    if (!UNDO) return;
+    var old = JSON.parse(UNDO); UNDO = null;
+    LIST_KEYS.forEach(function (k) { S[k] = old[k] || []; });
+    ['settings', 'daily', 'recon', 'limits'].forEach(function (k) { if (old[k] !== undefined) S[k] = old[k]; });
+    S.nextSeq = Math.max(S.nextSeq || 1, old.nextSeq || 1);
+    var bar = document.getElementById('undobar'); if (bar) bar.classList.remove('on');
+    persist().then(function () { toast('Undone'); });
+    if (UI.sheetOpen) { UI.draftDone = true; closeSheet(); }
+    render();
+  }
+
   function importFile(file) {
     if (!file) return;
     var reader = new FileReader();
@@ -2930,12 +3178,13 @@
         sync: S.meta.sync, hideAmounts: S.meta.hideAmounts, pinSkipped: S.meta.pinSkipped, knownDevices: S.meta.knownDevices, devSince: S.meta.devSince,
         lang: S.meta.lang, skipAccount: S.meta.skipAccount, profileSkipped: S.meta.profileSkipped, lastChannel: S.meta.lastChannel, deviceAlerts: S.meta.deviceAlerts };
       var mine = S.settings.profile;
+      undoPoint();
       S = normalize(obj); S.meta = Object.assign({ lastBackup: null }, S.meta);
       Object.keys(keep).forEach(function (k) { if (keep[k] !== undefined) S.meta[k] = keep[k]; else delete S.meta[k]; });
       if (!S.meta.pending) S.meta.pending = {};
       if (!S.settings.profile.name && mine && mine.name) S.settings.profile = mine;
       applyLocale(); migrate();
-      persist().then(function () { toast('Records restored'); });
+      persist().then(function () { offerUndo('Records restored'); });
       setTab('home');
     };
     reader.readAsText(file);
@@ -2962,13 +3211,13 @@
   }
   function hideCover() { if (cover) { cover.remove(); cover = null; } }
   var appHidden = false;
-  function appHide() { if (appHidden) return; appHidden = true; UI.hiddenAt = Date.now(); markAlive(); showCover(); }
+  function appHide() { if (appHidden) return; appHidden = true; UI.hiddenAt = Date.now(); if (UI.sheetOpen) saveDraft(true); markAlive(); showCover(); }
   function appShow() {
     if (!appHidden) return; appHidden = false;
     hideCover();
     if (Security.enabled() && !UI.locked && UI.hiddenAt) {
       var delay = Security.lockDelayMs();
-      if (delay !== Infinity && Date.now() - UI.hiddenAt >= delay) { try { sessionStorage.removeItem('act-alive'); } catch (e) {} UI.locked = true; UI.pin = ''; UI.pinMsg = ''; UI.bioTried = false; render(); return; }
+      if (delay !== Infinity && Date.now() - UI.hiddenAt >= delay) { try { sessionStorage.removeItem('act-alive'); } catch (e) {} UI.locked = true; UI.pin = ''; UI.pinMsg = ''; UI.bioTried = false; UI.resumeTried = false; render(); return; }
     }
     pullCaptured(); pullShared();
     if (!UI.sheetOpen) { recompute(); render(); }
