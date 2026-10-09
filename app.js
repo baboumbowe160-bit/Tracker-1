@@ -238,7 +238,9 @@
     'Kolomoni Microfinance': 'KM', 'NACCUG Credit Union': 'NC', 'Reliance Financial Services': 'RF', 'Salam Financial Services': 'SF',
     'Yonna Islamic Microfinance': 'YM', 'VISACA (Village Bank)': 'VS' };
   /* Official logos supplied by the owner, kept in the logos folder. Providers without one show their badge. */
-  var PROV_LOGO = { 'Wave': 'logos/wave.png' };
+  var PROV_LOGO = { 'Wave': 'logos/wave.png', 'APS': 'logos/aps.png', 'Nafa': 'logos/nafa.png', 'ComCach': 'logos/comcach.png',
+    'Afrimoney': 'logos/afrimoney.png', 'QMoney': 'logos/qmoney.png', 'Yonna': 'logos/yonna.png', 'Yonna Wallet': 'logos/yonna.png',
+    'Suturamoney': 'logos/suturamoney.png', 'Access Bank': 'logos/accessbank.png' };
   var PROV_ICON = { 'Bank Transfer': 'bank', 'Microfinance': 'mfi', 'Cash': 'cash', 'Cash in Hand': 'cash' };
   var provIndex = null;
   function provGroup(name) {
