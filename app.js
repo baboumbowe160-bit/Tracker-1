@@ -468,7 +468,7 @@
     if (tab === 'create') panel = '<div class="card"><div class="field"><label for="gc-name">Your name or business name</label><input id="gc-name" autocomplete="organization" value="' + esc(UI.gName || '') + '"></div>' +
       '<div class="field"><label for="gc-country">Country</label><select id="gc-country">' + countryOptions(UI.gCountry || 'GM') + '</select></div>' +
       '<div class="field"><label for="sync-email">Email</label><input id="sync-email" type="email" autocomplete="username" value="' + esc(UI.syncEmail || '') + '"></div>' +
-      '<div class="field"><label for="sync-pass">Password, at least 6 characters</label><input id="sync-pass" type="password" autocomplete="new-password"></div>' +
+      '<div class="field"><label for="sync-pass">Password: 8+ letters and numbers</label><input id="sync-pass" type="password" autocomplete="new-password"></div>' +
       '<div id="sync-msg"></div><button class="btn kiosk block" data-act="gateCreate">Create my account</button>' +
       '<p class="hint" style="text-align:center;margin:10px 0 0">By continuing you accept the <a href="privacy.html" target="_blank" rel="noopener">privacy policy</a>.</p></div>';
     else if (tab === 'signin') panel = '<div class="card"><div class="field"><label for="sync-email">Email</label><input id="sync-email" type="email" autocomplete="username" value="' + esc(UI.syncEmail || '') + '"></div>' +
@@ -491,7 +491,7 @@
       '<div class="field"><label for="gp-country">Country</label><select id="gp-country">' + countryOptions(p.country) + '</select><div class="note">Sets your currency and how phone numbers are checked. You can change them later.</div></div>' +
       '<div id="gp-msg"></div><button class="btn primary block" data-act="saveProfileGate">Continue</button>' +
       '<button class="btn block" data-act="skipProfile" style="border:0;background:none;color:var(--ink-soft)">Skip for now</button></div>' +
-      (S.sales.length || S.agents.length ? '' : '<button class="btn block" data-act="importBackup">I have a backup file to restore</button><input type="file" id="importFile" accept=".json,application/json" hidden>') + '</div>';
+      (S.sales.length || S.agents.length ? '' : '<div class="field" style="margin-top:10px"><label for="rs-pass">Backup Password, if it has one</label><input id="rs-pass" type="password" autocomplete="off"></div><button class="btn block" data-act="importBackup">I have a backup file to restore</button><input type="file" id="importFile" accept=".json,application/json" hidden>') + '</div>';
   }
   function dots(n, filled) { var h = ''; for (var i = 0; i < n; i++) h += '<i class="' + (i < filled ? 'on' : '') + '"></i>'; return '<div class="pin-dots">' + h + '</div>'; }
   function keypad(withBio) {
@@ -618,7 +618,7 @@
     var ag = { collect: 0, pay: 0, n: 0 };
     R.agents.balances.forEach(function (x) { if (x.net > 0) { ag.collect += x.net; ag.n++; } else ag.pay -= x.net; });
     var owing = R.customers.filter(function (c) { return c.owed > 0; }).length;
-    h += installCard() + backupBanner() + deviceBanner();
+    h += installCard() + verifyBanner() + backupBanner() + deviceBanner();
     h += '<div class="hero"><div class="hero-top"><div><div class="hello">' + (name ? 'Welcome, <b>' + esc(name) + '</b>' : 'Welcome') + '</div><div class="hdate">' + esc(readable(today)) + '</div></div>' +
       '<span class="hero-count"><b>' + dayNow.count + '</b> ' + (dayNow.count === 1 ? 'entry today' : 'entries today') + '</span></div>' +
       '<div class="label">Money received today</div><div class="big">' + money(dayNow.received) + '</div>' +
@@ -710,6 +710,16 @@
       '<button class="btn primary" data-act="install">Install</button><button class="x" data-act="hideInstall" aria-label="Close">×</button></div>';
     if (isIOS()) return '<div class="install"><img src="icon-192.png" alt="" width="44" height="44"><div class="tx"><b>Install the app</b><small>Tap the Share button, then Add to Home Screen.</small></div><button class="x" data-act="hideInstall" aria-label="Close">×</button></div>';
     return '';
+  }
+  function verifyCard(s) {
+    if (!s.signedIn || s.verified) return '';
+    return '<div class="card verify"><b>Confirm your email</b><p class="hint" style="margin:6px 0 10px">We sent a link to ' + esc(s.email) + '. Open it, then come back. Until then, new entries wait on this phone.</p>' +
+      '<div id="verify-msg"></div><div class="actions"><button class="btn primary" data-act="verifyCheck">I Have Confirmed</button><button class="btn" data-act="verifySend">Send Link Again</button></div></div>';
+  }
+  function verifyBanner() {
+    var s = window.Sync ? Sync.status() : null;
+    if (!s || !s.signedIn || s.verified) return '';
+    return '<div class="banner"><span>Confirm your email so your records keep going online.</span><button class="btn" data-act="go" data-v="sync">Confirm</button></div>';
   }
   function backupBanner() {
     if (window.Sync && Sync.status().signedIn) return '';
@@ -1356,8 +1366,11 @@
   function backupBody(lb) {
     return '<div class="card">' + kv('Last backup', lb ? esc(readable(lb)) : 'Never') + kv('Sales', S.sales.length) + kv('Agent entries', S.agents.length) +
       kv('Referral sales', S.referrals.length) + kv('Commission entries', S.walletComm.length + S.evc.length) + '</div>' +
+      '<div class="field" style="margin-top:12px"><label for="bk-pass">Backup Password</label><input id="bk-pass" type="password" autocomplete="new-password" placeholder="Recommended"></div>' +
+      '<p class="hint" style="margin-top:-6px">Without it, anyone who gets the file can read it. Write it down: without it the backup cannot be opened.</p>' +
       '<div class="actions"><button class="btn kiosk" data-act="backupShare">Send backup to Drive or WhatsApp</button><button class="btn primary" data-act="backupDownload">Save backup to phone</button></div>' +
       '<div class="section-title">Restore</div><p class="hint">Use this to bring back a backup, or to move your records to a new phone. It replaces everything currently in the app.</p>' +
+      '<div class="field"><label for="rs-pass">Backup Password, if it has one</label><input id="rs-pass" type="password" autocomplete="off"></div>' +
       '<button class="btn block" data-act="importBackup">Restore from a backup file</button><input type="file" id="importFile" accept=".json,application/json" hidden>' +
       '<div class="section-title">Spreadsheet</div><p class="hint">Download all sales as a spreadsheet file that opens in Excel.</p>' +
       '<button class="btn block" data-act="exportCsv">Download sales for Excel</button>';
@@ -1377,7 +1390,7 @@
   /* ----- Help ----- */
   VIEWS.help = function () {
     return '<div class="card help">' +
-      '<h3>To collect and to pay</h3><p>"To collect" is money someone must still pay you. "To pay" is money you must still pay someone. "Credit" means a customer paid you in advance.</p>' +
+      '<h3>Owes and Paid Ahead</h3><p>"Owes" is money a customer must still pay you. "Owes Us" is money an agent must pay you. "We Owe" is money you must pay an agent. "Paid Ahead" means a customer paid you in advance.</p>' +
       '<h3>Choosing the date</h3><p>New entries have no date until you tap Today, Yesterday or Other date, so a past sale is never saved with today\'s date by mistake. The Save button shows the date you chose.</p>' +
       '<h3>Phone numbers</h3><p>Since 4 September 2026, Africell numbers start with 87, QCell with 83 and Comium with 86. Gamcel numbers stay 7 digits. Type the old 7-digit number and the app adds the right start for you when you leave the box. Old and new forms of a number count as the same person.</p>' +
       '<h3>Risk check</h3><p>Each customer gets a risk score from what they owe, how long it has been unpaid, late payments and write-offs. Low risk can get credit up to their limit; High risk should pay on the spot. You can change any customer\'s credit limit.</p>' +
@@ -1388,11 +1401,11 @@
       '<h3>Customer types</h3><p>Regular: 3 or more sales and at least one a month. Irregular: fewer. Inactive: no sale for 90 days. Bad (high risk): oldest unpaid sale is over 60 days old. Do not give credit: something was written off.</p>' +
       '<h3>Agents</h3><p>"Paid to Agent" is money or float you sent to the agent. "Received from Agent" is what they sent you. If you paid more than you received, it shows as Owes Us. If you received more, it shows as We Owe.</p>' +
       '<h3>EVC</h3><p>Commission = purchase x operator rate. Shared with Partner = retail part x your partner\'s retail share, plus wholesale part x their wholesale share. On the wholesale part, the rest goes to the dealer.</p>' +
-      '<h3>Your data</h3><p>Everything stays on this phone and works without internet. Back it up every week from Settings, then Backup and Restore.</p></div>';
+      '<h3>Your data</h3><p>Everything is saved on this phone first and works without internet. Signed in, it also goes to your private online account. Give each backup a password so nobody else can open it.</p></div>';
   };
 
   /* ================= Online sync ================= */
-  var RULES = "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /users/{userId}/{document=**} {\n      allow read, write: if request.auth != null && request.auth.uid == userId;\n    }\n  }\n}";
+  var RULES = "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    function me(uid) { return request.auth != null && request.auth.uid == uid; }\n    function confirmed(uid) { return me(uid) && request.auth.token.email_verified == true; }\n    match /users/{uid}/records/{id} {\n      allow read, delete: if me(uid);\n      allow create, update: if confirmed(uid) && id.size() <= 200\n        && request.resource.data.keys().hasOnly(['c', 'k', 'd', 'del', 'at'])\n        && request.resource.data.c in ['sales', 'agents', 'referrals', 'walletComm', 'evc', 'capital', 'errors', 'expenses', 'daily', 'recon', 'meta'];\n    }\n    match /users/{uid}/devices/{id} {\n      allow read, delete: if me(uid);\n      allow create, update: if confirmed(uid) && id.size() <= 100\n        && request.resource.data.keys().hasOnly(['name', 'first', 'last', 'revoked']);\n    }\n  }\n}";
   function syncBadge() {
     var s = window.Sync ? Sync.status() : null;
     if (!s || !s.configured || !s.label) return '<span id="sync-badge"></span>';
@@ -1425,7 +1438,7 @@
         return signInForm('Create an account or sign in to keep your records online and on any phone. Records already on this phone are added to your account.') +
           '<p class="hint"><a href="privacy.html" target="_blank" rel="noopener">Privacy policy</a></p>';
       }
-      h += '<div id="sync-live">' + syncLive(s) + '</div>';
+      h += verifyCard(s) + '<div id="sync-live">' + syncLive(s) + '</div>';
       h += '<div class="actions"><button class="btn primary" data-act="syncNow">Sync now</button><button class="btn" data-act="syncSignOut">Sign out</button></div>' +
         '<p class="hint">Changes are saved on this phone first, then sent to your account in the background. Signing out removes your records from this phone; they come back when you sign in again.</p>';
       h += '<div class="section-title">Delete account</div><div class="card"><p class="hint" style="margin:0 0 10px">This permanently deletes your account and every record in it, online and on this phone.</p>' +
@@ -1451,13 +1464,13 @@
       h += '<div id="sync-live">' + syncLive(s) + '</div>';
       h += '<div class="card"><b>Sign in</b><p class="hint" style="margin:6px 0 10px">First time? Choose an email and password, then tap Create account. Your records on this phone are then uploaded. On another phone, use the same email and password and tap Sign in.</p>' +
         '<div class="field"><label for="sync-email">Email</label><input id="sync-email" type="email" autocomplete="username" value="' + esc(UI.syncEmail || '') + '"></div>' +
-        '<div class="field"><label for="sync-pass">Password, at least 6 characters</label><input id="sync-pass" type="password" autocomplete="current-password"></div>' +
+        '<div class="field"><label for="sync-pass">Password: 8+ letters and numbers</label><input id="sync-pass" type="password" autocomplete="current-password"></div>' +
         '<div id="sync-msg"></div><div class="actions"><button class="btn kiosk" data-act="syncSignUp">Create account</button><button class="btn primary" data-act="syncSignIn">Sign in</button></div>' +
         '<button class="btn block" data-act="syncReset" style="border:0;background:none;color:var(--ink-soft)">Forgot password?</button></div>';
       h += '<button class="btn danger block" data-act="syncRemove">Remove online setup</button>';
       return h;
     }
-    h += '<div id="sync-live">' + syncLive(s) + '</div>';
+    h += verifyCard(s) + '<div id="sync-live">' + syncLive(s) + '</div>';
     h += '<div class="actions"><button class="btn primary" data-act="syncNow">Sync now</button><button class="btn" data-act="syncSignOut">Sign out</button></div>' +
       '<p class="hint">Changes are saved on this phone first, then sent online in the background. If you are offline, they wait and go up as soon as you are back online.</p>';
     return h;
@@ -1469,7 +1482,7 @@
     if (!em || !pw) { syncMsg('Type your email and password.'); return; }
     syncMsg(kind === 'signUp' ? 'Creating your account…' : 'Signing in…', true);
     Sync[kind](em, pw).then(function () {
-      toast(kind === 'signUp' ? 'Account created. Uploading your records.' : 'Signed in. Bringing in your records.');
+      toast(kind === 'signUp' ? 'Account created. Confirm your email to start syncing.' : 'Signed in. Bringing in your records.');
       render();
     }, function (e) { syncMsg(e && e.message ? e.message : 'Something went wrong.'); });
   }
@@ -2172,7 +2185,7 @@
   function signInForm(intro) {
     return '<div class="card"><p class="hint" style="margin:0 0 10px">' + esc(intro) + '</p>' +
       '<div class="field"><label for="sync-email">Email</label><input id="sync-email" type="email" autocomplete="username" value="' + esc(UI.syncEmail || '') + '"></div>' +
-      '<div class="field"><label for="sync-pass">Password, at least 6 characters</label><input id="sync-pass" type="password" autocomplete="current-password"></div>' +
+      '<div class="field"><label for="sync-pass">Password</label><input id="sync-pass" type="password" autocomplete="current-password"></div>' +
       '<div id="sync-msg"></div><div class="actions"><button class="btn kiosk" data-act="syncSignUp">Create Account</button><button class="btn primary" data-act="syncSignIn">Sign In</button></div>' +
       '<button class="btn block" data-act="syncReset" style="border:0;background:none;color:var(--ink-soft)">Forgot password?</button></div>';
   }
@@ -2295,6 +2308,7 @@
       UI.gName = name; UI.gCountry = country; UI.syncEmail = em;
       if (!name) { syncMsg('Type your name or business name.'); return; }
       if (!em || !pw) { syncMsg('Type your email and a password.'); return; }
+      if (!Sync.strong(pw)) { syncMsg('Use at least 8 characters, with letters and numbers.'); return; }
       syncMsg('Creating your account…', true);
       Sync.signUp(em, pw).then(function () {
         S.settings.profile.name = name; setCountry(country); S.meta.profileSkipped = false;
@@ -2508,14 +2522,9 @@
       if (NATIVE) NATIVE.openUrl(wa); else window.open(wa, '_blank');
     },
     backupShare: function () {
-      var f = backupFile(), file = null;
-      if (NATIVE) { var rd = new FileReader(); rd.onload = function () { NATIVE.shareFile(f.name, 'application/json', String(rd.result).split(',')[1] || ''); markBackedUp(); }; rd.readAsDataURL(f.blob); return; }
-      try { file = new File([f.blob], f.name, { type: 'application/json' }); } catch (e) { file = null; }
-      if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
-        navigator.share({ files: [file], title: APP_NAME + ' backup' }).then(markBackedUp).catch(function () {});
-      } else { download(f.blob, f.name); markBackedUp(); }
+      backupFile().then(shareBackup, function () { toast('Could not make the backup.'); });
     },
-    backupDownload: function () { var f = backupFile(); download(f.blob, f.name); markBackedUp(); },
+    backupDownload: function () { backupFile().then(function (f) { download(f.blob, f.name); markBackedUp(); }, function () { toast('Could not make the backup.'); }); },
     importBackup: function () { document.getElementById('importFile').click(); },
     exportCsv: function () { exportCsv(); },
     saveSettings: function () {
@@ -2527,6 +2536,18 @@
       persist().then(function () { toast('Your choices are saved'); }); render();
     },
     copyRules: function () { copyText(RULES); },
+    verifySend: function () {
+      var m = document.getElementById('verify-msg');
+      Sync.sendVerify().then(function () { if (m) m.innerHTML = '<div class="form-info">' + esc(I18N.t('Link sent. Check your inbox and spam folder.')) + '</div>'; },
+        function (e) { if (m) m.innerHTML = '<div class="form-error">' + esc(e.message) + '</div>'; });
+    },
+    verifyCheck: function () {
+      var m = document.getElementById('verify-msg');
+      Sync.checkVerified().then(function (ok) {
+        if (ok) { toast('Email confirmed'); render(); }
+        else if (m) m.innerHTML = '<div class="form-error">' + esc(I18N.t('Not confirmed yet. Open the link in the email first.')) + '</div>';
+      });
+    },
     syncSaveConfig: function () {
       var t = document.getElementById('cfg-box').value;
       try { Sync.setConfig(t); toast('Connected to your Firebase project'); render(); }
@@ -2582,10 +2603,43 @@
     var ta = document.getElementById('msg'); ta.focus(); ta.select();
     try { document.execCommand('copy'); toast('Copied'); } catch (e) { toast('Press and hold the message to copy it.'); }
   }
+  /* Backups can be locked with a password (AES-GCM, key made from the password with PBKDF2). */
+  var BK_ITER = 250000;
+  function bkKey(pw, salt) {
+    var enc = new TextEncoder();
+    return crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveKey']).then(function (k) {
+      return crypto.subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt: salt, iterations: BK_ITER }, k, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+    });
+  }
+  function b64of(buf) { var s = '', b = new Uint8Array(buf); for (var i = 0; i < b.length; i += 8192) s += String.fromCharCode.apply(null, b.subarray(i, i + 8192)); return btoa(s); }
+  function bytesOf(b64) { var d = atob(b64), a = new Uint8Array(d.length); for (var i = 0; i < d.length; i++) a[i] = d.charCodeAt(i); return a; }
+  function lockBackup(text, pw) {
+    var salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+    return bkKey(pw, salt).then(function (k) { return crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, k, new TextEncoder().encode(text)); })
+      .then(function (ct) { return JSON.stringify({ app: 'agent-client-tracker', locked: 1, iter: BK_ITER, salt: b64of(salt), iv: b64of(iv), data: b64of(ct) }); });
+  }
+  function unlockBackup(obj, pw) {
+    return crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']).then(function (k) {
+      return crypto.subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt: bytesOf(obj.salt), iterations: obj.iter || BK_ITER }, k, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    }).then(function (key) { return crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytesOf(obj.iv) }, key, bytesOf(obj.data)); })
+      .then(function (plain) { return JSON.parse(new TextDecoder().decode(plain)); });
+  }
   function backupFile() {
-    var name = 'agent-client-tracker-backup-' + R.today + '.json';
-    var copy = Object.assign({}, S, { meta: { lastBackup: S.meta.lastBackup } });
-    return { blob: new Blob([JSON.stringify(copy)], { type: 'application/json' }), name: name };
+    var pwEl = document.getElementById('bk-pass'), pw = pwEl ? pwEl.value : '';
+    var name = 'agent-client-tracker-backup-' + R.today + (pw ? '-locked' : '') + '.json';
+    var copy = Object.assign({}, S, { meta: { lastBackup: S.meta.lastBackup } }), text = JSON.stringify(copy);
+    return (pw ? lockBackup(text, pw) : Promise.resolve(text)).then(function (out) {
+      if (pwEl) pwEl.value = '';
+      return { blob: new Blob([out], { type: 'application/json' }), name: name };
+    });
+  }
+  function shareBackup(f) {
+    var file = null;
+    if (NATIVE) { var rd = new FileReader(); rd.onload = function () { NATIVE.shareFile(f.name, 'application/json', String(rd.result).split(',')[1] || ''); markBackedUp(); }; rd.readAsDataURL(f.blob); return; }
+    try { file = new File([f.blob], f.name, { type: 'application/json' }); } catch (e) { file = null; }
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: APP_NAME + ' backup' }).then(markBackedUp).catch(function () {});
+    } else { download(f.blob, f.name); markBackedUp(); }
   }
   function markBackedUp() { S.meta.lastBackup = R.today; persist(); render(); toast('Backup saved'); }
   function download(blob, name) {
@@ -3186,6 +3240,18 @@
     reader.onload = function () {
       var obj;
       try { obj = JSON.parse(reader.result); } catch (e) { toast('That file is not a backup from this app.'); return; }
+      if (obj && obj.locked) {
+        var pwEl = document.getElementById('rs-pass'), pw = pwEl ? pwEl.value : '';
+        if (!pw) { toast('This backup has a password. Type it, then tap Restore again.'); if (pwEl) pwEl.focus(); return; }
+        unlockBackup(obj, pw).then(function (o) { if (pwEl) pwEl.value = ''; restoreObj(o); }, function () { toast('Wrong backup password.'); });
+        return;
+      }
+      restoreObj(obj);
+    };
+    reader.readAsText(file);
+  }
+  function restoreObj(obj) {
+    {
       if (!obj || !Array.isArray(obj.sales)) { toast('That file is not a backup from this app.'); return; }
       var msg = 'Restore this file?\n\nIt has ' + obj.sales.length + ' sales and ' + ((obj.agents || []).length) + ' agent entries.\n\nIt will REPLACE everything currently in the app' + (window.Sync && Sync.status().signedIn ? ', and your online records too.' : '.');
       if (!confirm(msg)) return;
@@ -3201,8 +3267,7 @@
       applyLocale(); migrate();
       persist().then(function () { offerUndo('Records restored'); });
       setTab('home');
-    };
-    reader.readAsText(file);
+    }
   }
   /* The app hides itself when you switch away, and locks again after the time you chose. */
   /* A refresh or an app update reloads the page. That is not leaving the app, so it does not ask for the PIN again.

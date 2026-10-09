@@ -122,7 +122,10 @@ jobs:
               android:icon="@mipmap/ic_launcher"
               android:roundIcon="@mipmap/ic_launcher"
               android:theme="@style/AppTheme"
-              android:allowBackup="true"
+              android:allowBackup="false"
+              android:fullBackupContent="false"
+              android:dataExtractionRules="@xml/data_extraction_rules"
+              android:usesCleartextTraffic="false"
               android:supportsRtl="true">
               <activity
                 android:name=".MainActivity"
@@ -152,6 +155,15 @@ jobs:
               </provider>
             </application>
           </manifest>
+          EOF
+
+          mkdir -p $A/res/xml
+          cat > $A/res/xml/data_extraction_rules.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <data-extraction-rules>
+            <cloud-backup><exclude domain="root" path="." /><exclude domain="database" path="." /><exclude domain="sharedpref" path="." /><exclude domain="file" path="." /></cloud-backup>
+            <device-transfer><exclude domain="root" path="." /><exclude domain="database" path="." /><exclude domain="sharedpref" path="." /><exclude domain="file" path="." /></device-transfer>
+          </data-extraction-rules>
           EOF
 
           cat > $A/res/values/strings.xml <<'EOF'
@@ -284,6 +296,9 @@ jobs:
               s.setDatabaseEnabled(true);
               s.setAllowFileAccess(false);
               s.setAllowContentAccess(false);
+              s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+              if (android.os.Build.VERSION.SDK_INT >= 26) s.setSafeBrowsingEnabled(true);
+              WebView.setWebContentsDebuggingEnabled(false);
               s.setTextZoom(100);
 
               web.addJavascriptInterface(new Bridge(), "AndroidBridge");

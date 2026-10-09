@@ -1029,3 +1029,20 @@ I18N.add('fr', {
   [/^(\d+) days$/, "$1 jours"], [/^(\d+) entries$/, "$1 saisies"],
   [/^(\d+) customers? · owing (.+) · paid ahead (.+)$/, "$1 client(s) · doivent $2 · payé d'avance $3"]
 ]);
+I18N.add('fr', {
+  "Password: 8+ letters and numbers": "Mot de passe : 8+ lettres et chiffres", "Use at least 8 characters, with letters and numbers.": "Utilisez au moins 8 caractères, avec des lettres et des chiffres.",
+  "Confirm your email": "Confirmez votre e-mail", "I Have Confirmed": "J'ai confirmé", "Send Link Again": "Renvoyer le lien",
+  "Link sent. Check your inbox and spam folder.": "Lien envoyé. Vérifiez votre boîte de réception et les spams.",
+  "Not confirmed yet. Open the link in the email first.": "Pas encore confirmé. Ouvrez d'abord le lien dans l'e-mail.",
+  "Confirm your email so your records keep going online.": "Confirmez votre e-mail pour que vos données continuent d'aller en ligne.", "Confirm": "Confirmer",
+  "Email confirmed": "E-mail confirmé", "Verify your email": "Confirmez votre e-mail", "Backup Password": "Mot de passe de la sauvegarde", "Recommended": "Recommandé",
+  "Without it, anyone who gets the file can read it. Write it down: without it the backup cannot be opened.": "Sans lui, toute personne qui a le fichier peut le lire. Notez-le : sans lui, la sauvegarde ne peut pas être ouverte.",
+  "Backup Password, if it has one": "Mot de passe de la sauvegarde, s'il y en a un", "This backup has a password. Type it, then tap Restore again.": "Cette sauvegarde a un mot de passe. Tapez-le, puis touchez Restaurer à nouveau.",
+  "Wrong backup password.": "Mauvais mot de passe de sauvegarde.", "Could not make the backup.": "Impossible de créer la sauvegarde.",
+  "Account created. Confirm your email to start syncing.": "Compte créé. Confirmez votre e-mail pour lancer la synchronisation.",
+  "Owes and Paid Ahead": "Doit et Payé d'avance",
+  "\"Owes\" is money a customer must still pay you. \"Owes Us\" is money an agent must pay you. \"We Owe\" is money you must pay an agent. \"Paid Ahead\" means a customer paid you in advance.": "« Doit » est l'argent qu'un client doit encore vous payer. « Nous doit » est l'argent qu'un agent doit vous payer. « Nous devons » est l'argent que vous devez à un agent. « Payé d'avance » veut dire qu'un client vous a payé à l'avance.",
+  "Everything is saved on this phone first and works without internet. Signed in, it also goes to your private online account. Give each backup a password so nobody else can open it.": "Tout est d'abord enregistré sur ce téléphone et fonctionne sans internet. Une fois connecté, tout va aussi dans votre compte privé en ligne. Donnez un mot de passe à chaque sauvegarde pour que personne d'autre ne puisse l'ouvrir."
+}, [
+  [/^We sent a link to (.+)\. Open it, then come back\. Until then, new entries wait on this phone\.$/, "Nous avons envoyé un lien à $1. Ouvrez-le, puis revenez. En attendant, les nouvelles saisies restent sur ce téléphone."]
+]);

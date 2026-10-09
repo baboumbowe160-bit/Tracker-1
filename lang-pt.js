@@ -1029,3 +1029,20 @@ I18N.add('pt', {
   [/^(\d+) days$/, "$1 dias"], [/^(\d+) entries$/, "$1 registos"],
   [/^(\d+) customers? · owing (.+) · paid ahead (.+)$/, "$1 cliente(s) · em dívida $2 · pago adiantado $3"]
 ]);
+I18N.add('pt', {
+  "Password: 8+ letters and numbers": "Palavra-passe: 8+ letras e números", "Use at least 8 characters, with letters and numbers.": "Use pelo menos 8 caracteres, com letras e números.",
+  "Confirm your email": "Confirme o seu email", "I Have Confirmed": "Já confirmei", "Send Link Again": "Enviar link de novo",
+  "Link sent. Check your inbox and spam folder.": "Link enviado. Veja a caixa de entrada e o spam.",
+  "Not confirmed yet. Open the link in the email first.": "Ainda não confirmado. Abra primeiro o link no email.",
+  "Confirm your email so your records keep going online.": "Confirme o seu email para que os registos continuem a ir online.", "Confirm": "Confirmar",
+  "Email confirmed": "Email confirmado", "Verify your email": "Confirme o seu email", "Backup Password": "Palavra-passe da cópia", "Recommended": "Recomendado",
+  "Without it, anyone who gets the file can read it. Write it down: without it the backup cannot be opened.": "Sem ela, quem tiver o ficheiro pode lê-lo. Anote-a: sem ela a cópia não pode ser aberta.",
+  "Backup Password, if it has one": "Palavra-passe da cópia, se tiver", "This backup has a password. Type it, then tap Restore again.": "Esta cópia tem palavra-passe. Escreva-a e toque em Restaurar de novo.",
+  "Wrong backup password.": "Palavra-passe da cópia errada.", "Could not make the backup.": "Não foi possível criar a cópia.",
+  "Account created. Confirm your email to start syncing.": "Conta criada. Confirme o seu email para começar a sincronizar.",
+  "Owes and Paid Ahead": "Deve e Pago adiantado",
+  "\"Owes\" is money a customer must still pay you. \"Owes Us\" is money an agent must pay you. \"We Owe\" is money you must pay an agent. \"Paid Ahead\" means a customer paid you in advance.": "\"Deve\" é o dinheiro que um cliente ainda lhe tem de pagar. \"Deve-nos\" é o dinheiro que um agente lhe tem de pagar. \"Devemos\" é o dinheiro que tem de pagar a um agente. \"Pago adiantado\" quer dizer que um cliente pagou antes.",
+  "Everything is saved on this phone first and works without internet. Signed in, it also goes to your private online account. Give each backup a password so nobody else can open it.": "Tudo é guardado primeiro neste telefone e funciona sem internet. Com sessão iniciada, vai também para a sua conta privada online. Dê uma palavra-passe a cada cópia para que mais ninguém a possa abrir."
+}, [
+  [/^We sent a link to (.+)\. Open it, then come back\. Until then, new entries wait on this phone\.$/, "Enviámos um link para $1. Abra-o e volte. Até lá, os novos registos ficam neste telefone."]
+]);

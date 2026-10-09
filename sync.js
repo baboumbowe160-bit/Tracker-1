@@ -37,7 +37,8 @@
     var map = {
       'auth/invalid-email': 'That email address does not look right.',
       'auth/missing-password': 'Type a password.',
-      'auth/weak-password': 'Use a password of at least 6 characters.',
+      'auth/weak-password': 'Use at least 8 characters, with letters and numbers.',
+      'auth/password-does-not-meet-requirements': 'Use at least 8 characters, with letters and numbers.',
       'auth/email-already-in-use': 'An account with this email already exists. Tap Sign in instead.',
       'auth/invalid-credential': 'Wrong email or password.',
       'auth/wrong-password': 'Wrong email or password.',
@@ -70,7 +71,7 @@
 
   /* ---------- pending list -> online ---------- */
   function flush() {
-    if (!db || !user) { emit(); return; }
+    if (!db || !user || !user.emailVerified) { emit(); return; }
     var S = host.getS(), p = pend(S), now = toDocs(S);
     var ids = Object.keys(p).filter(function (id) { return inFlight[id] !== p[id].v; });
     if (!ids.length) { emit(); return; }
@@ -277,13 +278,14 @@
     else if (st.phase === 'loading') { label = 'Connecting'; }
     else if (st.phase === 'nosdk') { label = online ? 'Sync not reachable' : 'Offline, saved on phone'; tone = online ? 'owed' : 'neutral'; }
     else if (st.phase === 'signin') { label = 'Sign in to sync'; tone = 'owed'; }
+    else if (user && !user.emailVerified) { label = 'Verify your email'; tone = 'owed'; }
     else if (st.error) { label = 'Sync problem'; tone = 'late'; }
     else if (!online) { label = n ? 'Offline, ' + n + ' to sync' : 'Offline, saved on phone'; }
     else if (n || st.snapPending || !firstServerSnap) { label = 'Syncing'; }
     else { label = 'Synced'; tone = 'credit'; }
     var ready = !!user && (firstServerSnap || !!(S && S.meta.sync && S.meta.sync.uid === user.uid && S.meta.sync.sinceAt));
     return { configured: !!cfg, managed: managed, phase: st.phase, label: label, tone: tone, email: st.email, pending: n,
-      error: st.error, lastSynced: st.lastSynced, signedIn: !!user, ready: ready };
+      error: st.error, lastSynced: st.lastSynced, signedIn: !!user, verified: !!(user && user.emailVerified), ready: ready };
   }
 
   /* ---------- setup and sign-in ---------- */
@@ -294,6 +296,18 @@
     if (missing.length) throw new Error('The setup block is missing: ' + missing.join(', ') + '. Copy the whole firebaseConfig block from Firebase.');
     return out;
   }
+  /* A new password needs 8 or more characters with letters and numbers. */
+  function strong(pw) { pw = String(pw || ''); return pw.length >= 8 && /[A-Za-z]/.test(pw) && /\d/.test(pw); }
+  /* Saving online needs a confirmed email. Reading your own records does not, so nothing is ever locked away. */
+  function checkVerified() {
+    if (!user) return Promise.resolve(false);
+    return user.reload().then(function () {
+      user = auth.currentUser;
+      if (!user || !user.emailVerified) { emit(); return false; }
+      return user.getIdToken(true).then(function () { emit(); flush(); return true; });
+    })['catch'](function () { emit(); return false; });
+  }
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && user && !user.emailVerified) checkVerified(); });
   function needAuth() { if (!auth) return Promise.reject({ message: 'Still connecting to Firebase. Check your internet, then try again.' }); return null; }
 
   g.Sync = {
@@ -325,7 +339,12 @@
     signUp: function (email, pw) {
       var bad = needAuth(); if (bad) return bad;
       explicitSignIn = true;
-      return auth.createUserWithEmailAndPassword(email, pw).then(function (r) { if (g.Security) g.Security.markPassword(); return r; },
+      if (!strong(pw)) return Promise.reject({ message: 'Use at least 8 characters, with letters and numbers.' });
+      return auth.createUserWithEmailAndPassword(email, pw).then(function (r) {
+        if (g.Security) g.Security.markPassword();
+        if (r && r.user) r.user.sendEmailVerification()['catch'](function () {});
+        return r;
+      },
         function (e) { explicitSignIn = false; throw { message: friendly(e) }; });
     },
     signIn: function (email, pw) {
@@ -338,6 +357,12 @@
     removeDevice: function (id) {
       if (!db || !user) return Promise.reject({ message: 'Sign in first.' });
       return devCol().doc(id).update({ revoked: true })['catch'](function (e) { throw { message: friendly(e) }; });
+    },
+    strong: strong,
+    checkVerified: checkVerified,
+    sendVerify: function () {
+      if (!user) return Promise.reject({ message: 'Sign in first.' });
+      return user.sendEmailVerification()['catch'](function (e) { throw { message: friendly(e) }; });
     },
     resetPassword: function (email) { return needAuth() || auth.sendPasswordResetEmail(email)['catch'](function (e) { throw { message: friendly(e) }; }); },
     signOut: function () {
