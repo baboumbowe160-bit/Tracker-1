@@ -713,7 +713,7 @@
   }
   function verifyCard(s) {
     if (!s.signedIn || s.verified) return '';
-    return '<div class="card verify"><b>Confirm your email</b><p class="hint" style="margin:6px 0 10px">We sent a link to ' + esc(s.email) + '. Open it, then come back. Until then, new entries wait on this phone.</p>' +
+    return '<div class="card verify"><b>Confirm your email</b><p class="hint" style="margin:6px 0 10px">Open the link we sent to ' + esc(s.email) + ', then tap below.</p>' +
       '<div id="verify-msg"></div><div class="actions"><button class="btn primary" data-act="verifyCheck">I Have Confirmed</button><button class="btn" data-act="verifySend">Send Link Again</button></div></div>';
   }
   function verifyBanner() {

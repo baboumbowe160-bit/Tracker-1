@@ -1044,5 +1044,5 @@ I18N.add('fr', {
   "\"Owes\" is money a customer must still pay you. \"Owes Us\" is money an agent must pay you. \"We Owe\" is money you must pay an agent. \"Paid Ahead\" means a customer paid you in advance.": "« Doit » est l'argent qu'un client doit encore vous payer. « Nous doit » est l'argent qu'un agent doit vous payer. « Nous devons » est l'argent que vous devez à un agent. « Payé d'avance » veut dire qu'un client vous a payé à l'avance.",
   "Everything is saved on this phone first and works without internet. Signed in, it also goes to your private online account. Give each backup a password so nobody else can open it.": "Tout est d'abord enregistré sur ce téléphone et fonctionne sans internet. Une fois connecté, tout va aussi dans votre compte privé en ligne. Donnez un mot de passe à chaque sauvegarde pour que personne d'autre ne puisse l'ouvrir."
 }, [
-  [/^We sent a link to (.+)\. Open it, then come back\. Until then, new entries wait on this phone\.$/, "Nous avons envoyé un lien à $1. Ouvrez-le, puis revenez. En attendant, les nouvelles saisies restent sur ce téléphone."]
+  [/^Open the link we sent to (.+), then tap below\.$/, "Ouvrez le lien envoyé à $1, puis touchez ci-dessous."]
 ]);
